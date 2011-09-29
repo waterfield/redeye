@@ -20,7 +20,8 @@
   "main": "server",
   "dependencies": {
     "coffee-script": "1.1",
-    "redis": "0.6"
+    "redis": "0.6",
+    "vows": "0.5"
   },
   "scripts": {
     "server": "node server.js",
