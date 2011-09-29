@@ -1,3 +1,4 @@
-worker = import '../worker'
-
-worker 'rand', -> Math.random()
+worker = require 'worker'
+worker 'rand', ->
+  console.log "! rand"
+  Math.random()

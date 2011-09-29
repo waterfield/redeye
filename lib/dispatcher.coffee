@@ -1,7 +1,7 @@
 # Dependencies.
 consts = require('./consts')
 req = require('./db')()
-res = requre('./db')()
+res = require('./db')()
 db = require('./db')()
 
 # The dispatcher accepts requests for keys and manages the
@@ -10,33 +10,65 @@ db = require('./db')()
 # re-run whenever their dependencies are met.
 class Dispatcher
 
+  # Initializer
+  constructor: (@test_mode=false) ->
+    console.log "dispatcher: initialize"
+    @count = {}
+    @state = {}
+    @deps = {}
+    
   # Subscribe to the `requests` and `responses` channels.
-  initialize: ->
+  listen: ->
     req.on 'message', (ch, str) => @requested str
     res.on 'message', (ch, str) => @responded str
     req.subscribe 'requests'
     res.subscribe 'responses'
-    @count = {}
-    @state = {}
-    @deps = {}
+    console.log "dispatcher: subscribed"
 
   # Called when a worker requests keys. The keys requested are
   # recorded as dependencies, and any new key requests are
   # turned into new jobs.
   requested: (str) ->
+    console.log "dispatcher: requested: #{str}"
     [source, keys...] = str.split consts.key_sep
     return if @state[source]
-    @new_request source, keys
-
+    if keys.length
+      @new_request source, keys
+    else
+      @seed source
+  
   # Called when a key is completed. Any jobs depending on this
   # key are updated, and if they have no more dependencies, are
   # signalled to run again.
   responded: (key) ->
+    console.log "dispatcher: responded: #{key}"
     @state[key] = 'done'
     targets = @deps[key] ? []
     delete @deps[key]
     @progress targets
+
+  # The given key is a 'seed' request. In test mode, completion of
+  # the seed request signals termination of the workers.
+  seed: (key) ->
+    console.log "dispatcher: seed: #{key}"
+    @new_request '!seed', [key]
   
+  # The seed request was completed. In test mode, quit the workers.
+  unseed: ->
+    console.log "dispatcher: unseed"
+    @quit() if @test_mode
+  
+  # Send quit signals to the work queues.
+  quit: ->
+    for i in [1..100]
+      db.rpush 'jobs', '!quit'
+    finish = ->
+      db.del 'jobs'
+      req.end()
+      res.end()
+      db.end()
+    setTimeout finish, 500
+
   # Make progress on each of the given keys by decrementing
   # their count of remaining dependencies. When any reaches
   # zero, it is rescheduled.
@@ -46,23 +78,24 @@ class Dispatcher
         delete @count[key]
         @reschedule key
   
-  # Signal a job to run again by pushing onto its blocking lock.
+  # Signal a job to run again by sending a resume message
   reschedule: (key) ->
-    lock = "resume_#{key}"
-    db.rpush lock, 'ok'
-
+    return @unseed() if key == '!seed'
+    db.publish 'resume', key
+  
   # Handle a request we've never seen before from a given source
   # job that depends on the given keys.
   new_request: (source, keys) ->
     @reqs = []
     @state[source] = 'wait'
     @count[source] = 0
+    console.log "dispatcher: new_request: source:", source, "keys:", keys
     @handle_request source, keys
 
   # Handle the requested keys by marking them as dependencies
   # and turning any unsatisfied ones into new jobs.
   handle_request: (source, keys) ->
-    for key in keys
+    for key in @unique(keys)
       @mark_dependency source, key
     @request_dependencies()
 
@@ -76,8 +109,22 @@ class Dispatcher
     (@deps[key] ?= []).push source
     @count[source]++
 
+  # Find unique elements of a list (kinda the wrong place for this...)
+  unique: (list) ->
+    hash = {}
+    uniq = []
+    for elem in list
+      uniq.push elem unless hash[elem]
+      hash[elem] = true
+    uniq
+
   # Take the unmet dependencies from the latest request and push
   # them onto the `jobs` queue.
   request_dependencies: ->
     for req in @reqs
       db.rpush 'jobs', req
+
+exports.run = (test_mode=false) ->
+  console.log 'running dispatcher'
+  new Dispatcher(test_mode).listen()
+  console.log 'dispatcher now running'

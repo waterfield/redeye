@@ -24,9 +24,10 @@
 # result from the function, but not both.
 
 # Dependencies.
-consts = require('./consts')
-db = require('./db')()
 events = require 'events'
+consts = require './consts'
+get_db = require './db'
+db = get_db()
 
 # Counts the number of simultaneous workers.
 num_workers = 0
@@ -47,8 +48,14 @@ runners = {}
 # acquisition of jobs, where all but one worker are starved.
 class WorkQueue extends events.EventEmitter
 
-  # Register the 'next' event.
-  initialize: ->
+  # Register the 'next' event, and listen for 'resume' messages.
+  constructor: (@callback) ->
+    @db = get_db()
+    @resume = get_db()
+    @workers = {}
+    @resume.on 'message', (_, key) =>
+      @workers[key]?.resume()
+    @resume.subscribe 'resume'
     @on 'next', => @next()
 
   # Look for the next job using BLPOP on the "jobs" queue. This
@@ -57,11 +64,17 @@ class WorkQueue extends events.EventEmitter
   # 
   # You can push the job `!quit` to make the work queue die.
   next: ->
-    db.blpop 'jobs', (err, str) ->
+    console.log "blpop 'jobs'"
+    @db.blpop 'jobs', 0, (err, [_, str]) =>
+      console.log "blpop 'jobs' done: #{JSON.stringify(str)}"
       throw err if err
-      return if str == '!quit'
-      new Worker(str).run =>
-        @emit 'next'
+      if str == '!quit'
+        @db.end()
+        @resume.end()
+        db.end()
+        return @callback?()
+      @workers[str] = new Worker(str)
+      @workers[str].run => @emit 'next'
 
 
 # The worker class is the context under which runner functions are run.
@@ -70,10 +83,11 @@ class Worker
   # Find the runner for the `@key`. The key is in the format:
   # 
   #     prefix:arg1:arg2:...
-  initialize: (@key) ->
-    [@prefix, @args...] = @key.split consts.arg_sep
-    @runner = runners[@prefix]
-    throw "no runner for '#{prefix}'" unless @runner
+  constructor: (@key) ->
+    [@prefix, args...] = @key.split consts.arg_sep
+    @args = args # weird bug in coffeescript: wanted @args... in line above
+    unless @runner = runners[@prefix]
+      throw new Error("no runner for '#{@prefix}'")
     @cache = {}
     @last_stage = 0
     num_workers++
@@ -86,6 +100,7 @@ class Worker
     if @stage < @last_stage
       @cache[key]
     else
+      console.log "worker: add dep: #{key}"
       @deps.push key
       undefined
 
@@ -101,6 +116,7 @@ class Worker
   # Otherwise, abort the runner function and start over (after checking
   # that our dependencies are met).
   for_reals: ->
+    console.log "worker: for_reals: stage:", @stage, "last_stage:", @last_stage
     if @stage == @last_stage
       throw 'resolve'
     else
@@ -113,9 +129,10 @@ class Worker
       @clear()
       @process()
     catch err
+      console.log "worker: run caught: #{err}"
       @caught err
     finally
-      callback()
+      callback?()
 
   # Reset information about this run, including:
   # 
@@ -138,10 +155,11 @@ class Worker
   # Call the runner. If it gets all the way through, then optionally
   # emit the result of the function (if nothing has been emitted yet).
   process: ->
-    result = @runner.call this, @args
+    result = @runner.apply this, @args
     num_workers--
     if result? && !@emitted
       @emit @key, result
+    console.log "worker: done:", @key
 
   # Compare the provided values against our current dependencies.
   # Missing dependencies are returned in an array.
@@ -156,6 +174,7 @@ class Worker
   # to record that there's one more of them to get through, then to check
   # the dependencies.
   resolve: ->
+    console.log "worker: resolve"
     @last_stage++
     @get_deps()
 
@@ -163,9 +182,12 @@ class Worker
   # send a request to the dispatcher; otherwise, resume trying to run the
   # main function.
   get_deps: ->
-    db.mget @deps, (err, arr) ->
+    console.log "worker: get_deps:", @deps
+    db.mget @deps, (err, arr) =>
       throw err if err
+      console.log "worker: mget:", arr
       bad = @check_values arr
+      console.log "worker: bad:", bad
       if bad.length
         @request_missing bad
       else
@@ -177,11 +199,12 @@ class Worker
   # dependencies (which should all be present).
   request_missing: (keys) ->
     request = [@key, keys...].join consts.key_sep
+    console.log "worker: requesting: #{request}"
     db.publish 'requests', request
-    lock = "resume_#{@key}"
-    db.blpop lock, (err, _) =>
-      throw err if err
-      @get_deps()
+
+  # The dispatcher said to resume, so go look for the missing values again.
+  resume: ->
+    @get_deps()
 
 
 # Export the `runners` and a main `run` function that kicks
@@ -190,5 +213,5 @@ module.exports =
 
   runners: runners
   
-  run: ->
-    new WorkQueue().next()
+  run: (callback) ->
+    new WorkQueue(callback).next()
