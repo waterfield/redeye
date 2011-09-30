@@ -1,5 +1,6 @@
 # Dependencies.
-consts = require('./consts')
+consts = require './consts'
+debug = require './debug'
 req = require('./db')()
 res = require('./db')()
 db = require('./db')()
@@ -12,7 +13,7 @@ class Dispatcher
 
   # Initializer
   constructor: (@test_mode=false) ->
-    console.log "dispatcher: initialize"
+    debug.log "dispatcher: initialize"
     @count = {}
     @state = {}
     @deps = {}
@@ -23,13 +24,13 @@ class Dispatcher
     res.on 'message', (ch, str) => @responded str
     req.subscribe 'requests'
     res.subscribe 'responses'
-    console.log "dispatcher: subscribed"
+    debug.log "dispatcher: subscribed"
 
   # Called when a worker requests keys. The keys requested are
   # recorded as dependencies, and any new key requests are
   # turned into new jobs.
   requested: (str) ->
-    console.log "dispatcher: requested: #{str}"
+    debug.log "dispatcher: requested: #{str}"
     [source, keys...] = str.split consts.key_sep
     return if @state[source]
     if keys.length
@@ -41,7 +42,7 @@ class Dispatcher
   # key are updated, and if they have no more dependencies, are
   # signalled to run again.
   responded: (key) ->
-    console.log "dispatcher: responded: #{key}"
+    debug.log "dispatcher: responded: #{key}"
     @state[key] = 'done'
     targets = @deps[key] ? []
     delete @deps[key]
@@ -50,12 +51,12 @@ class Dispatcher
   # The given key is a 'seed' request. In test mode, completion of
   # the seed request signals termination of the workers.
   seed: (key) ->
-    console.log "dispatcher: seed: #{key}"
+    debug.log "dispatcher: seed: #{key}"
     @new_request '!seed', [key]
   
   # The seed request was completed. In test mode, quit the workers.
   unseed: ->
-    console.log "dispatcher: unseed"
+    debug.log "dispatcher: unseed"
     @quit() if @test_mode
   
   # Send quit signals to the work queues.
@@ -89,7 +90,7 @@ class Dispatcher
     @reqs = []
     @state[source] = 'wait'
     @count[source] = 0
-    console.log "dispatcher: new_request: source:", source, "keys:", keys
+    debug.log "dispatcher: new_request: source:", source, "keys:", keys
     @handle_request source, keys
 
   # Handle the requested keys by marking them as dependencies
@@ -125,6 +126,6 @@ class Dispatcher
       db.rpush 'jobs', req
 
 exports.run = (test_mode=false) ->
-  console.log 'running dispatcher'
+  debug.log 'running dispatcher'
   new Dispatcher(test_mode).listen()
-  console.log 'dispatcher now running'
+  debug.log 'dispatcher now running'

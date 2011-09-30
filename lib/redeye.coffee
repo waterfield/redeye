@@ -27,6 +27,7 @@
 events = require 'events'
 consts = require './consts'
 get_db = require './db'
+debug = require './debug'
 db = get_db()
 
 # Counts the number of simultaneous workers.
@@ -64,9 +65,9 @@ class WorkQueue extends events.EventEmitter
   # 
   # You can push the job `!quit` to make the work queue die.
   next: ->
-    console.log "blpop 'jobs'"
+    debug.log "blpop 'jobs'"
     @db.blpop 'jobs', 0, (err, [_, str]) =>
-      console.log "blpop 'jobs' done: #{JSON.stringify(str)}"
+      debug.log "blpop 'jobs' done: #{JSON.stringify(str)}"
       throw err if err
       return @quit() if str == '!quit'
       @workers[str] = new Worker(str)
@@ -104,7 +105,7 @@ class Worker
     if @stage < @last_stage
       @cache[key]
     else
-      console.log "worker: add dep: #{key}"
+      debug.log "worker: add dep: #{key}"
       @deps.push key
       undefined
 
@@ -120,7 +121,7 @@ class Worker
   # Otherwise, abort the runner function and start over (after checking
   # that our dependencies are met).
   for_reals: ->
-    console.log "worker: for_reals: stage:", @stage, "last_stage:", @last_stage
+    debug.log "worker: for_reals: stage:", @stage, "last_stage:", @last_stage
     if @stage == @last_stage
       throw 'resolve'
     else
@@ -133,7 +134,7 @@ class Worker
       @clear()
       @process()
     catch err
-      console.log "worker: run caught: #{err}"
+      debug.log "worker: run caught: #{err}"
       @caught err
 
   # Reset information about this run, including:
@@ -161,7 +162,7 @@ class Worker
     num_workers--
     if result? && !@emitted
       @emit @key, result
-    console.log "worker: done:", @key
+    debug.log "worker: done:", @key
 
   # Compare the provided values against our current dependencies.
   # Missing dependencies are returned in an array.
@@ -176,7 +177,7 @@ class Worker
   # to record that there's one more of them to get through, then to check
   # the dependencies.
   resolve: ->
-    console.log "worker: resolve"
+    debug.log "worker: resolve"
     @last_stage++
     @get_deps()
 
@@ -184,12 +185,12 @@ class Worker
   # send a request to the dispatcher; otherwise, resume trying to run the
   # main function.
   get_deps: ->
-    console.log "worker: get_deps:", @deps
+    debug.log "worker: get_deps:", @deps
     db.mget @deps, (err, arr) =>
       throw err if err
-      console.log "worker: mget:", arr
+      debug.log "worker: mget:", arr
       bad = @check_values arr
-      console.log "worker: bad:", bad
+      debug.log "worker: bad:", bad
       if bad.length
         @request_missing bad
       else
@@ -201,7 +202,7 @@ class Worker
   # dependencies (which should all be present).
   request_missing: (keys) ->
     request = [@key, keys...].join consts.key_sep
-    console.log "worker: requesting: #{request}"
+    debug.log "worker: requesting: #{request}"
     db.publish 'requests', request
 
   # The dispatcher said to resume, so go look for the missing values again.

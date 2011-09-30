@@ -1,36 +1,32 @@
 # Test that a simple set of jobs can work together.
 
 # Dependencies.
-db = require('db')()
-require './workers/add'
-require './workers/rand'
+worker = require 'worker'
+debug = require 'debug'
+redeye_suite = require './support/redeye_suite'
 
-assert = null
+# Worker: add two other keys together
+worker 'add', (a, b) ->
+  a = @get a
+  b = @get b
+  @for_reals()
+  a + b
 
-run_tests = ->
-  exports['simple test'] = (exit, the_assert) ->
-    assert = the_assert
-    console.log "assert =", the_assert, ", exit:", exit
-    db.publish 'requests', 'add:rand:rand'
-    console.log "test: publish request: add:rand:rand"
+# Worker: produce a random number
+worker 'rand', ->
+  Math.random()
 
-expectations = (callback) ->
-  db.get 'add:rand:rand', (err, str) ->
-    assert.isNull err
-    assert.isNotNull str
-    assert.match str, /[01]\.[0-9]+/
-    callback?()
 
-cleanup = ->
-  db.end()
+module.exports = redeye_suite ->
 
-start = ->
-  db.flushall ->
+  'simple test':
 
-    # Start the dispatcher and a worker.
-    require('../lib/dispatcher').run(true)
-    require('../lib/redeye').run -> expectations cleanup
-  
-    setTimeout run_tests, 100
+    setup: (db) ->
+      db.publish 'requests', 'add:rand:rand'
+      debug.log 'published request'
 
-start()
+    expect: (db, assert, finish) ->
+      db.get 'add:rand:rand', (err, str) ->
+        assert.match str, /[01]\.[0-9]+/
+        finish()
+
