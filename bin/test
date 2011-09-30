@@ -1,0 +1,2 @@
+#! /bin/sh
+$_/../expresso -I $_/../../lib $_/../../test/**/*_test.coffee

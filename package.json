@@ -15,7 +15,9 @@
   "directories": {
     "docs": "./docs",
     "lib": "./lib",
-    "test": "./test"
+    "test": "./test",
+    "bin": "./bin",
+    "script": "./script"
   },
   "main": "server",
   "dependencies": {
@@ -25,7 +27,7 @@
     "expresso": "0.9"
   },
   "scripts": {
-    "server": "node server.js",
-    "client": "node client.js"
+    "server": "node script/server.js",
+    "client": "node script/client.js"
   }
 }
