@@ -68,13 +68,17 @@ class WorkQueue extends events.EventEmitter
     @db.blpop 'jobs', 0, (err, [_, str]) =>
       console.log "blpop 'jobs' done: #{JSON.stringify(str)}"
       throw err if err
-      if str == '!quit'
-        @db.end()
-        @resume.end()
-        db.end()
-        return @callback?()
+      return @quit() if str == '!quit'
       @workers[str] = new Worker(str)
-      @workers[str].run => @emit 'next'
+      @workers[str].run()
+      @emit 'next'
+  
+  # Shut down the redis connection and stop running workers
+  quit: ->
+    @db.end()
+    @resume.end()
+    db.end()
+    @callback?()
 
 
 # The worker class is the context under which runner functions are run.
@@ -124,15 +128,13 @@ class Worker
 
   # Attempt to run the runner function. If a call to `@for_reals` causes
   # us to abort, then attempt to resolve the dependencies.
-  run: (callback) ->
+  run: ->
     try
       @clear()
       @process()
     catch err
       console.log "worker: run caught: #{err}"
       @caught err
-    finally
-      callback?()
 
   # Reset information about this run, including:
   # 

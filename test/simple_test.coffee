@@ -10,6 +10,7 @@ assert = null
 run_tests = ->
   exports['simple test'] = (exit, the_assert) ->
     assert = the_assert
+    console.log "assert =", the_assert, ", exit:", exit
     db.publish 'requests', 'add:rand:rand'
     console.log "test: publish request: add:rand:rand"
 
@@ -31,7 +32,5 @@ start = ->
     require('../lib/redeye').run -> expectations cleanup
   
     setTimeout run_tests, 100
-
-
 
 start()
