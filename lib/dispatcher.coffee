@@ -16,7 +16,7 @@ class Dispatcher
 
   # Initializer
   constructor: (@test_mode=false, @idle_timeout) ->
-    @idle_timeout = if @test_mode then 500 else 10000
+    @idle_timeout ?= if @test_mode then 500 else 10000
     @count = {}
     @state = {}
     @deps = {}
