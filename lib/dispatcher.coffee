@@ -32,7 +32,7 @@ class Dispatcher
   requested: (str) ->
     debug.log "dispatcher: requested: #{str}"
     [source, keys...] = str.split consts.key_sep
-    return if @state[source]
+#    return if @state[source]
     if keys.length
       @audit "?#{str}"
       @new_request source, keys
@@ -94,7 +94,6 @@ class Dispatcher
   # job that depends on the given keys.
   new_request: (source, keys) ->
     @reqs = []
-    @state[source] = 'wait'
     @count[source] = 0
     debug.log "dispatcher: new_request: source:", source, "keys:", keys
     @handle_request source, keys
@@ -114,7 +113,6 @@ class Dispatcher
   # the key is already completed, then do nothing; if it has
   # not been previously requested, create a new job for it.
   mark_dependency: (source, key) ->
-    debug.log "dispatcher: state of #{key} is #{@state[key]}"
     switch @state[key]
       when 'done' then return
       when undefined then @reqs.push key
@@ -136,6 +134,7 @@ class Dispatcher
   request_dependencies: ->
     for req in @reqs
       debug.log "dispatcher: asking for: #{req}"
+      @state[req] = 'wait'
       db.rpush 'jobs', req
       
 

@@ -1,4 +1,4 @@
-# Tests the audit trail produced by the dispatcher
+# Tests that multiple requests are just satisfied once
 
 # Dependencies.
 worker = require 'worker'
@@ -10,9 +10,8 @@ AuditListener = require './support/audit_listener'
 audit = new AuditListener
 dispatcher.audit audit
 
-worker 'a', -> @get 'b'; @get 'c'
-worker 'b', -> @get 'c'
-worker 'c', -> 216
+worker 'a', -> @get 'b' for i in [1..3]
+worker 'b', -> 216
 
 module.exports = redeye_suite ->
 
@@ -21,9 +20,5 @@ module.exports = redeye_suite ->
     setup: (db) -> db.publish 'requests', 'a'
 
     expect: (db, assert, finish) ->
-      db.get 'a', (err, str) ->
-        order1 = ['?a|b|c', '?b|c', '!c', '!b', '!a'].join ''
-        order2 = ['?a|b|c', '!c', '?b|c', '!b', '!a'].join ''
-        real_order = audit.messages.join ''
-        assert.includes [order1, order2], real_order
-        finish()
+      assert.eql audit.messages, ['?a|b|b|b', '!b', '!a']
+      finish()

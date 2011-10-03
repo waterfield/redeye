@@ -1,4 +1,4 @@
-# Tests the audit trail produced by the dispatcher
+# Tests that side effects can be required withotu an explicit worker
 
 # Dependencies.
 worker = require 'worker'
@@ -10,9 +10,16 @@ AuditListener = require './support/audit_listener'
 audit = new AuditListener
 dispatcher.audit audit
 
-worker 'a', -> @get 'b'; @get 'c'
-worker 'b', -> @get 'c'
-worker 'c', -> 216
+worker 'a', ->
+  b = @get 'b'
+  @for_reals()
+  c = @get 'c'
+  @for_reals()
+  b + c
+
+worker 'b', ->
+  @emit 'c', 3
+  @emit 'b', 2
 
 module.exports = redeye_suite ->
 
@@ -22,8 +29,6 @@ module.exports = redeye_suite ->
 
     expect: (db, assert, finish) ->
       db.get 'a', (err, str) ->
-        order1 = ['?a|b|c', '?b|c', '!c', '!b', '!a'].join ''
-        order2 = ['?a|b|c', '!c', '?b|c', '!b', '!a'].join ''
-        real_order = audit.messages.join ''
-        assert.includes [order1, order2], real_order
+        assert.equal str, '5'
+        assert.eql audit.messages, ['?a|b', '!c', '!b', '!a']
         finish()
