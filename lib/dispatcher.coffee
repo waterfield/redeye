@@ -32,7 +32,6 @@ class Dispatcher
   requested: (str) ->
     debug.log "dispatcher: requested: #{str}"
     [source, keys...] = str.split consts.key_sep
-#    return if @state[source]
     if keys.length
       @audit "?#{str}"
       @new_request source, keys

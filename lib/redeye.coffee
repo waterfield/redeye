@@ -101,7 +101,8 @@ class Worker
   # value we've received (which we know we got because otherwise we
   # wouldn't be running again). Otherwise, just mark this dependency
   # and return `undefined`.
-  get: (key) ->
+  get: (args...) ->
+    key = args.join consts.arg_sep
     if @stage < @last_stage
       @cache[key]
     else
