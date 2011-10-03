@@ -55,3 +55,5 @@ class Doctor
       for target in targets
         sources = (@inv[target] ?= [])
         sources.push source
+
+module.exports = Doctor

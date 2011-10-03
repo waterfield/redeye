@@ -1,6 +1,7 @@
 # Dependencies.
 consts = require './consts'
 debug = require './debug'
+Doctor = require './doctor'
 req = require('./db')()
 res = require('./db')()
 db = require('./db')()
@@ -14,7 +15,8 @@ audit_stream = null
 class Dispatcher
 
   # Initializer
-  constructor: (@test_mode=false) ->
+  constructor: (@test_mode=false, @idle_timeout) ->
+    @idle_timeout = if @test_mode then 500 else 10000
     @count = {}
     @state = {}
     @deps = {}
@@ -66,6 +68,7 @@ class Dispatcher
   
   # Send quit signals to the work queues.
   quit: ->
+    @clear_timeout()
     for i in [1..100]
       db.rpush 'jobs', '!quit'
     finish = ->
@@ -79,9 +82,33 @@ class Dispatcher
   # their count of remaining dependencies. When any reaches
   # zero, it is rescheduled.
   progress: (keys) ->
+    @reset_timeout()
     for key in keys
       unless --@count[key]
         @reschedule key
+  
+  # Reset the timer that checks if the process is broken
+  reset_timeout: ->
+    @clear_timeout()
+    @timeout = setTimeout (=> @idle()), @idle_timeout
+  
+  # Activate a handler for idle timeouts. By default, this means
+  # calling the doctor.
+  idle: ->
+    if @idle_handler
+      @idle_handler()
+    else
+      @call_doctor()
+  
+  # Let the doctor figure out what's wrong here
+  call_doctor: ->
+    @doc ?= new Doctor @deps, @state, @seed
+    @doc.diagnose()
+    @doc.report()
+  
+  # Clear the timeout
+  clear_timeout: ->
+    clearTimeout @timeout
   
   # Signal a job to run again by sending a resume message
   reschedule: (key) ->
