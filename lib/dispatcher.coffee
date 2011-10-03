@@ -59,6 +59,7 @@ class Dispatcher
   # the seed request signals termination of the workers.
   seed: (key) ->
     debug.log "dispatcher: seed: #{key}"
+    @_seed = key
     @new_request '!seed', [key]
   
   # The seed request was completed. In test mode, quit the workers.
@@ -82,7 +83,6 @@ class Dispatcher
   # their count of remaining dependencies. When any reaches
   # zero, it is rescheduled.
   progress: (keys) ->
-    @reset_timeout()
     for key in keys
       unless --@count[key]
         @reschedule key
@@ -95,6 +95,7 @@ class Dispatcher
   # Activate a handler for idle timeouts. By default, this means
   # calling the doctor.
   idle: ->
+    debug.log "dispatcher: idling"
     if @idle_handler
       @idle_handler()
     else
@@ -102,9 +103,10 @@ class Dispatcher
   
   # Let the doctor figure out what's wrong here
   call_doctor: ->
-    @doc ?= new Doctor @deps, @state, @seed
+    debug.log "dispatcher: calling the doctor"
+    @doc ?= new Doctor @deps, @state, @_seed
     @doc.diagnose()
-    @doc.report()
+    #@doc.report()
   
   # Set the idle handler
   when_idle: (@idle_handler) ->
@@ -123,6 +125,7 @@ class Dispatcher
   # job that depends on the given keys.
   new_request: (source, keys) ->
     @reqs = []
+    @reset_timeout()
     @count[source] = 0
     debug.log "dispatcher: new_request: source:", source, "keys:", keys
     @handle_request source, keys

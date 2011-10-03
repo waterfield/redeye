@@ -5,50 +5,40 @@ class Doctor
   diagnose: ->
     @clear()
     @invert_deps()
-    @find_cycles()
-    @find_loose_ends()
+    @scan @seed
 
   report: ->
     @report_loose_ends()
     @report_cycles()
   
   report_cycles: ->
-    return unless @cycles.count
+    #return unless @cycles.count
     console.log "Cycles:"
     for cycle in @cycles
       console.log "  #{cycle.join ' -> '}"
   
   report_loose_ends: ->
-    return unless @loose_ends.count
+    #return unless @loose_ends.count
     console.log "Loose ends: #{@loose_ends.join(', ')}"
 
   clear: ->
     @inv = {}
     @cycles = []
     @loose_ends = []
-
-  find_cycles: ->
     @stack = []
-    @scan_cycles @seed
-  
-  scan_cycles: (node) ->
+
+  scan: (node) ->
     if node in @stack
-      @cycles.push @stack
+      @cycles.push @stack[0..-1]
       return
     @stack.push node
-    for next in @inv[node] ? []
-      scan_cycles next
+    nexts = @inv[node] ? []
+    for next in nexts
+      @scan next
+    unless nexts.length
+      unless @state[node] == 'done'
+        @loose_ends.push node
     @stack.pop()
-
-  find_loose_ends: ->
-    scan_loose_ends @seed
-  
-  scan_loose_ends: (node) ->
-    return if @state[node] == 'done'
-    if nexts = @inv[node]
-      scan_loose_ends node for node in nexts
-    else if !(node in @loose_ends)
-      @loose_ends.push node
 
   invert_deps: ->
     for source, targets of @deps
