@@ -106,6 +106,9 @@ class Dispatcher
     @doc.diagnose()
     @doc.report()
   
+  # Set the idle handler
+  when_idle: (@idle_handler) ->
+  
   # Clear the timeout
   clear_timeout: ->
     clearTimeout @timeout
