@@ -54,7 +54,7 @@ class WorkQueue extends events.EventEmitter
     @db = get_db()
     @resume = get_db()
     @workers = {}
-    @resume.on 'message', (_, key) =>
+    @resume.on 'message', (channel, key) =>
       @workers[key]?.resume()
     @resume.subscribe 'resume'
     @on 'next', => @next()
@@ -66,7 +66,7 @@ class WorkQueue extends events.EventEmitter
   # You can push the job `!quit` to make the work queue die.
   next: ->
     debug.log "blpop 'jobs'"
-    @db.blpop 'jobs', 0, (err, [_, str]) =>
+    @db.blpop 'jobs', 0, (err, [key, str]) =>
       debug.log "blpop 'jobs' done: #{JSON.stringify(str)}"
       throw err if err
       return @quit() if str == '!quit'

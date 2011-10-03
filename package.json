@@ -24,7 +24,8 @@
     "coffee-script": "1.1",
     "redis": "0.6",
     "vows": "0.5",
-    "expresso": "0.9"
+    "expresso": "0.9",
+    "underscore": "1.1"
   },
   "scripts": {
     "server": "node script/server.js",
