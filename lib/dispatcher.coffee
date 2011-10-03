@@ -170,7 +170,9 @@ class Dispatcher
 module.exports =
 
   run: (test_mode=false) ->
-    new Dispatcher(test_mode).listen()
+    dispatcher = new Dispatcher(test_mode)
+    dispatcher.listen()
+    dispatcher
   
   audit: (stream) ->
     audit_stream = stream ? audit_stream

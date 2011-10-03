@@ -4,8 +4,8 @@ module.exports = (fun) ->
   for name, test of tests
     tests[name] = (exit, assert) ->
       db.flushall ->
-        require('dispatcher').run(true)
+        disp = require('dispatcher').run(true)
         require('redeye').run ->
           test.expect db, assert, -> db.end()
-        setTimeout (-> test.setup db), 100
+        setTimeout (-> test.setup db, disp), 100
   tests
