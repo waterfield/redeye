@@ -7,13 +7,15 @@ redeye_suite = require './support/redeye_suite'
 
 worker 'problem', ->
   a = @get 'x', 2, 3
-  b = @get 'x', 1, 7
+  b = @get 'y', 1, 7
   @for_reals()
   a + b
 
 worker 'x', (a, b) ->
-  parseInt(a) * parseInt(b)
+  @emit @key, parseInt(a) * parseInt(b)
 
+worker 'y', (a, b) ->
+  @emit 'y', a, b, parseInt(a) * parseInt(b)
 
 module.exports = redeye_suite ->
 

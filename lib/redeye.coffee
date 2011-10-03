@@ -113,8 +113,9 @@ class Worker
   # Produce `value` as a result for `key`. This both puts the result
   # in redis under the key and tells the dispatcher (via the `responses`
   # channel) that the job is done.
-  emit: (key, value) ->
+  emit: (args..., value) ->
     @emitted = true
+    key = args.join consts.arg_sep
     db.set key, JSON.stringify(value)
     db.publish 'responses', key
 
