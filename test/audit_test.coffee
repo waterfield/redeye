@@ -8,13 +8,13 @@ redeye_suite = require './support/redeye_suite'
 
 class AuditListener
   constructor: -> @clear()
-  write: (str) -> @messages.push str.trim()
+  write: (str) -> @messages.push str.trim(); console.log str
   clear: -> @messages = []
 
 audit = new AuditListener
 dispatcher.audit audit
 
-worker 'a', -> @get 'b'
+worker 'a', -> @get 'b'; @get 'c'
 worker 'b', -> @get 'c'
 worker 'c', -> 216
 
@@ -27,5 +27,5 @@ module.exports = redeye_suite ->
     expect: (db, assert, finish) ->
       db.get 'a', (err, str) ->
         assert.equal str, '216'
-        assert.eql audit.messages, ['?a|b', '?b|c', '!c', '!b', '!a']
+        assert.eql audit.messages, ['?a|b|c', '?b|c', '!c', '!b', '!a']
         finish()

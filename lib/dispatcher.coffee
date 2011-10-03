@@ -15,7 +15,6 @@ class Dispatcher
 
   # Initializer
   constructor: (@test_mode=false) ->
-    debug.log "dispatcher: initialize"
     @count = {}
     @state = {}
     @deps = {}
@@ -26,7 +25,6 @@ class Dispatcher
     res.on 'message', (ch, str) => @responded str
     req.subscribe 'requests'
     res.subscribe 'responses'
-    debug.log "dispatcher: subscribed"
 
   # Called when a worker requests keys. The keys requested are
   # recorded as dependencies, and any new key requests are
@@ -55,7 +53,6 @@ class Dispatcher
   # Write text to the audit stream
   audit: (text) ->
     audit_stream.write "#{text}\n" if audit_stream
-    debug.log "audit: #{text}"
 
   # The given key is a 'seed' request. In test mode, completion of
   # the seed request signals termination of the workers.
@@ -85,11 +82,11 @@ class Dispatcher
   progress: (keys) ->
     for key in keys
       unless --@count[key]
-        delete @count[key]
         @reschedule key
   
   # Signal a job to run again by sending a resume message
   reschedule: (key) ->
+    delete @count[key]
     return @unseed() if key == '!seed'
     db.publish 'resume', key
   
@@ -107,15 +104,21 @@ class Dispatcher
   handle_request: (source, keys) ->
     for key in @unique(keys)
       @mark_dependency source, key
-    @request_dependencies()
+    if @count[source]
+      @request_dependencies()
+    else
+      debug.log "dispatcher: already satisfied: #{source}"
+      @reschedule source
 
   # Mark the key as a dependency of the given source job. If
   # the key is already completed, then do nothing; if it has
   # not been previously requested, create a new job for it.
   mark_dependency: (source, key) ->
+    debug.log "dispatcher: state of #{key} is #{@state[key]}"
     switch @state[key]
       when 'done' then return
       when undefined then @reqs.push key
+    debug.log "dispatcher: #{source} now depends on #{key}"
     (@deps[key] ?= []).push source
     @count[source]++
 
@@ -132,14 +135,14 @@ class Dispatcher
   # them onto the `jobs` queue.
   request_dependencies: ->
     for req in @reqs
+      debug.log "dispatcher: asking for: #{req}"
       db.rpush 'jobs', req
+      
 
 module.exports =
 
   run: (test_mode=false) ->
-    debug.log 'running dispatcher'
     new Dispatcher(test_mode).listen()
-    debug.log 'dispatcher now running'
   
   audit: (stream) ->
     audit_stream = stream ? audit_stream
