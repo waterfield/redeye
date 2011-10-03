@@ -159,6 +159,7 @@ class Worker
   # emit the result of the function (if nothing has been emitted yet).
   process: ->
     result = @runner.apply this, @args
+    return @resolve() if @deps.length
     num_workers--
     if result? && !@emitted
       @emit @key, result

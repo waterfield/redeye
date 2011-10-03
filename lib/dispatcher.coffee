@@ -5,6 +5,8 @@ req = require('./db')()
 res = require('./db')()
 db = require('./db')()
 
+audit_stream = null
+
 # The dispatcher accepts requests for keys and manages the
 # dependencies between jobs. It ensures that the same work
 # is never requested more than once, and makes sure jobs are
@@ -34,6 +36,7 @@ class Dispatcher
     [source, keys...] = str.split consts.key_sep
     return if @state[source]
     if keys.length
+      @audit "?#{str}"
       @new_request source, keys
     else
       @seed source
@@ -43,10 +46,16 @@ class Dispatcher
   # signalled to run again.
   responded: (key) ->
     debug.log "dispatcher: responded: #{key}"
+    @audit "!#{key}"
     @state[key] = 'done'
     targets = @deps[key] ? []
     delete @deps[key]
     @progress targets
+
+  # Write text to the audit stream
+  audit: (text) ->
+    audit_stream.write "#{text}\n" if audit_stream
+    debug.log "audit: #{text}"
 
   # The given key is a 'seed' request. In test mode, completion of
   # the seed request signals termination of the workers.
@@ -125,7 +134,12 @@ class Dispatcher
     for req in @reqs
       db.rpush 'jobs', req
 
-exports.run = (test_mode=false) ->
-  debug.log 'running dispatcher'
-  new Dispatcher(test_mode).listen()
-  debug.log 'dispatcher now running'
+module.exports =
+
+  run: (test_mode=false) ->
+    debug.log 'running dispatcher'
+    new Dispatcher(test_mode).listen()
+    debug.log 'dispatcher now running'
+  
+  audit: (stream) ->
+    audit_stream = stream ? audit_stream
