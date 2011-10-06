@@ -26,21 +26,12 @@
 # Dependencies.
 events = require 'events'
 consts = require './consts'
-get_db = require './db'
+db = require './db'
 debug = require './debug'
-db = get_db()
 
 # Counts the number of simultaneous workers.
 num_workers = 0
 
-# This holds a list of registered runners, hashed by their job prefix.
-#
-# For instance:
-#
-#     runners =
-#       rand: (n) -> ...
-#       add: (a,b) -> ...
-runners = {}
 
 # The `WorkQueue` accepts job requests and starts `Worker` objects
 # to handle them.
@@ -50,14 +41,24 @@ runners = {}
 class WorkQueue extends events.EventEmitter
 
   # Register the 'next' event, and listen for 'resume' messages.
-  constructor: (@callback) ->
-    @db = get_db()
-    @resume = get_db()
+  constructor: (@options) ->
+    @db = db @options.db_index
+    @resume = db @options.db_index
+    @worker_db = db @options.db_index
     @workers = {}
+    @runners = {}
     @resume.on 'message', (channel, key) =>
       @workers[key]?.resume()
-    @resume.subscribe 'resume'
+    @resume.subscribe "resume_#{@options.db_index}"
     @on 'next', => @next()
+  
+  # Run the work queue, calling the given callback on completion
+  run: (@callback) ->
+    @next()  
+    
+  # Add a worker to the context
+  worker: (prefix, runner) ->
+    @runners[prefix] = runner
 
   # Look for the next job using BLPOP on the "jobs" queue. This
   # will use an event emitter to call `next` again, so the stack
@@ -67,10 +68,10 @@ class WorkQueue extends events.EventEmitter
   next: ->
     debug.log "blpop 'jobs'"
     @db.blpop 'jobs', 0, (err, [key, str]) =>
-      debug.log "blpop 'jobs' done: #{JSON.stringify(str)}"
+      debug.log "queue: job: #{JSON.stringify(str)}"
       throw err if err
       return @quit() if str == '!quit'
-      @workers[str] = new Worker(str)
+      @workers[str] = new Worker(str, this)
       @workers[str].run()
       @emit 'next'
   
@@ -78,7 +79,7 @@ class WorkQueue extends events.EventEmitter
   quit: ->
     @db.end()
     @resume.end()
-    db.end()
+    @worker_db.end()
     @callback?()
 
 
@@ -88,10 +89,13 @@ class Worker
   # Find the runner for the `@key`. The key is in the format:
   # 
   #     prefix:arg1:arg2:...
-  constructor: (@key) ->
+  constructor: (@key, @queue) ->
     [@prefix, args...] = @key.split consts.arg_sep
     @args = args # weird bug in coffeescript: wanted @args... in line above
-    unless @runner = runners[@prefix]
+    @db = @queue.worker_db
+    @req_channel = "requests_#{@queue.options.db_index}"
+    @resp_channel = "responses_#{@queue.options.db_index}"
+    unless @runner = @queue.runners[@prefix]
       throw new Error("no runner for '#{@prefix}'")
     @cache = {}
     @last_stage = 0
@@ -116,8 +120,8 @@ class Worker
   emit: (args..., value) ->
     @emitted = true
     key = args.join consts.arg_sep
-    db.set key, JSON.stringify(value)
-    db.publish 'responses', key
+    @db.set key, JSON.stringify(value)
+    @db.publish @resp_channel, key
 
   # If we've seen this `@for_reals` before, then blow right past it.
   # Otherwise, abort the runner function and start over (after checking
@@ -189,7 +193,7 @@ class Worker
   # main function.
   get_deps: ->
     debug.log "worker: get_deps:", @deps
-    db.mget @deps, (err, arr) =>
+    @db.mget @deps, (err, arr) =>
       throw err if err
       debug.log "worker: mget:", arr
       bad = @check_values arr
@@ -206,18 +210,13 @@ class Worker
   request_missing: (keys) ->
     request = [@key, keys...].join consts.key_sep
     debug.log "worker: requesting: #{request}"
-    db.publish 'requests', request
+    @db.publish @req_channel, request
 
   # The dispatcher said to resume, so go look for the missing values again.
   resume: ->
     @get_deps()
 
 
-# Export the `runners` and a main `run` function that kicks
-# off the `WorkQueue`.
 module.exports =
 
-  runners: runners
-  
-  run: (callback) ->
-    new WorkQueue(callback).next()
+  queue: (options) -> new WorkQueue(options ? {})

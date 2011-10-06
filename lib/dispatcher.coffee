@@ -2,11 +2,7 @@
 consts = require './consts'
 debug = require './debug'
 Doctor = require './doctor'
-req = require('./db')()
-res = require('./db')()
-db = require('./db')()
-
-audit_stream = null
+db = require('./db')
 
 # The dispatcher accepts requests for keys and manages the
 # dependencies between jobs. It ensures that the same work
@@ -15,18 +11,24 @@ audit_stream = null
 class Dispatcher
 
   # Initializer
-  constructor: (@test_mode=false, @idle_timeout) ->
-    @idle_timeout ?= if @test_mode then 500 else 10000
+  constructor: (@options) ->
+    @test_mode = @options.test_mode
+    @idle_timeout = @options.idle_timeout ? (if @test_mode then 500 else 10000)
+    @audit_stream = @options.audit
+    @db = db @options.db_index
+    @req = db @options.db_index
+    @res = db @options.db_index
+    @resume_channel = "resume_#{@options.db_index}"
     @count = {}
     @state = {}
     @deps = {}
-    
+
   # Subscribe to the `requests` and `responses` channels.
   listen: ->
-    req.on 'message', (ch, str) => @requested str
-    res.on 'message', (ch, str) => @responded str
-    req.subscribe 'requests'
-    res.subscribe 'responses'
+    @req.on 'message', (ch, str) => @requested str
+    @res.on 'message', (ch, str) => @responded str
+    @req.subscribe "requests_#{@options.db_index}"
+    @res.subscribe "responses_#{@options.db_index}"
 
   # Called when a worker requests keys. The keys requested are
   # recorded as dependencies, and any new key requests are
@@ -53,7 +55,7 @@ class Dispatcher
 
   # Write text to the audit stream
   audit: (text) ->
-    audit_stream.write "#{text}\n" if audit_stream
+    @audit_stream.write "#{text}\n" if @audit_stream
 
   # The given key is a 'seed' request. In test mode, completion of
   # the seed request signals termination of the workers.
@@ -71,12 +73,12 @@ class Dispatcher
   quit: ->
     @clear_timeout()
     for i in [1..100]
-      db.rpush 'jobs', '!quit'
-    finish = ->
-      db.del 'jobs'
-      req.end()
-      res.end()
-      db.end()
+      @db.rpush 'jobs', '!quit'
+    finish = =>
+      @db.del 'jobs'
+      @req.end()
+      @res.end()
+      @db.end()
     setTimeout finish, 500
 
   # Make progress on each of the given keys by decrementing
@@ -119,7 +121,7 @@ class Dispatcher
   reschedule: (key) ->
     delete @count[key]
     return @unseed() if key == '!seed'
-    db.publish 'resume', key
+    @db.publish @resume_channel, key
   
   # Handle a request we've never seen before from a given source
   # job that depends on the given keys.
@@ -167,15 +169,12 @@ class Dispatcher
     for req in @reqs
       debug.log "dispatcher: asking for: #{req}"
       @state[req] = 'wait'
-      db.rpush 'jobs', req
+      @db.rpush 'jobs', req
       
 
 module.exports =
 
-  run: (test_mode=false) ->
-    dispatcher = new Dispatcher(test_mode)
+  run: (options) ->
+    dispatcher = new Dispatcher(options ? {})
     dispatcher.listen()
     dispatcher
-  
-  audit: (stream) ->
-    audit_stream = stream ? audit_stream
