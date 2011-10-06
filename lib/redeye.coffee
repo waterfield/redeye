@@ -32,12 +32,8 @@ debug = require './debug'
 # Counts the number of simultaneous workers.
 num_workers = 0
 
-
 # The `WorkQueue` accepts job requests and starts `Worker` objects
 # to handle them.
-# 
-# FIXME: the BLPOP could potentially cause an unbalanced
-# acquisition of jobs, where all but one worker are starved.
 class WorkQueue extends events.EventEmitter
 
   # Register the 'next' event, and listen for 'resume' messages.
@@ -161,7 +157,9 @@ class Worker
     else
       throw err
 
-  # Call the runner. If it gets all the way through, then optionally
+  # Call the runner. If it gets all the way through, first check if there
+  # were any unmet dependencies after the last `@for_reals`. If so, we force
+  # one last dependency resolution. Otherwise, we optionally
   # emit the result of the function (if nothing has been emitted yet).
   process: ->
     result = @runner.apply this, @args
@@ -218,5 +216,6 @@ class Worker
 
 
 module.exports =
-
+  
+  # Create and return a new work queue with the given options.
   queue: (options) -> new WorkQueue(options ? {})

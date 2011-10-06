@@ -1,5 +1,4 @@
 # Constants
-
 module.exports =
 
   # Separator between arguments in a key

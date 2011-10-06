@@ -1,8 +1,8 @@
-# Dependencies.
 consts = require './consts'
 debug = require './debug'
 Doctor = require './doctor'
 db = require('./db')
+_ = require 'underscore'
 
 # The dispatcher accepts requests for keys and manages the
 # dependencies between jobs. It ensures that the same work
@@ -89,6 +89,13 @@ class Dispatcher
       unless --@count[key]
         @reschedule key
   
+  # Set the idle handler
+  when_idle: (@idle_handler) ->
+  
+  # Clear the timeout for idling
+  clear_timeout: ->
+    clearTimeout @timeout
+
   # Reset the timer that checks if the process is broken
   reset_timeout: ->
     @clear_timeout()
@@ -110,13 +117,6 @@ class Dispatcher
     @doc.diagnose()
     #@doc.report()
   
-  # Set the idle handler
-  when_idle: (@idle_handler) ->
-  
-  # Clear the timeout
-  clear_timeout: ->
-    clearTimeout @timeout
-  
   # Signal a job to run again by sending a resume message
   reschedule: (key) ->
     delete @count[key]
@@ -135,7 +135,7 @@ class Dispatcher
   # Handle the requested keys by marking them as dependencies
   # and turning any unsatisfied ones into new jobs.
   handle_request: (source, keys) ->
-    for key in @unique(keys)
+    for key in _.uniq keys
       @mark_dependency source, key
     if @count[source]
       @request_dependencies()
@@ -154,15 +154,6 @@ class Dispatcher
     (@deps[key] ?= []).push source
     @count[source]++
 
-  # Find unique elements of a list (kinda the wrong place for this...)
-  unique: (list) ->
-    hash = {}
-    uniq = []
-    for elem in list
-      uniq.push elem unless hash[elem]
-      hash[elem] = true
-    uniq
-
   # Take the unmet dependencies from the latest request and push
   # them onto the `jobs` queue.
   request_dependencies: ->
@@ -174,6 +165,8 @@ class Dispatcher
 
 module.exports =
 
+  # Create a new dispatcher instance and start it listening for
+  # requests. Then return the dispatcher.
   run: (options) ->
     dispatcher = new Dispatcher(options ? {})
     dispatcher.listen()
