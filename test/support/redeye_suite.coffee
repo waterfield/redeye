@@ -30,6 +30,7 @@
 dispatcher = require 'dispatcher'
 redeye = require 'redeye'
 debug = require 'debug'
+consts = require 'consts'
 AuditListener = require './audit_listener'
 db = require 'db'
 
@@ -83,7 +84,8 @@ class RedeyeTest
     @db.end()
   
   # Send a request to the correct `requests` channel
-  request: (key) ->
+  request: (args...) ->
+    key = args.join consts.arg_sep
     @db.publish "requests_#{@db_index}", key
 
 

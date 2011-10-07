@@ -30,3 +30,44 @@ module.exports = redeye_suite
         @assert.match str, /[01]\.[0-9]+/
         @finish()
 
+
+  # Test that multiple stages of @for_reals works
+  'multiple resolution stages':
+
+    workers:
+      # Requests 'b' multiple times with different arguments
+      a: ->
+        b1 = @get 'b', 1; @for_reals()
+        b2 = @get 'b', 2; @for_reals()
+        b3 = @get 'b', 3; @for_reals()
+        b1 + b2 + b3 # heh, these are strings :)
+      b: (n) -> n
+
+    setup: -> @request 'a'
+
+    # Test that all the jobs ran correctly
+    expect: ->
+      @db.get 'a', (err, str) =>
+        @assert.equal str, '"123"'
+        @assert.eql @audit.messages, ['?a|b:1', '!b:1', '?a|b:2', '!b:2', '?a|b:3', '!b:3', '!a']
+        @finish()
+
+
+  # It wouldn't be complete without a Fibonacci test!
+  'fibonacci':
+
+    workers:
+      fib: (n) ->
+        return 1 if n < 2
+        a = @get 'fib', n-2
+        b = @get 'fib', n-1
+        @for_reals()
+        a + b
+
+    setup: ->
+      @request 'fib', 8
+
+    expect: ->
+      @db.get 'fib:8', (err, str) =>
+        @assert.equal str, '34'
+        @finish()
