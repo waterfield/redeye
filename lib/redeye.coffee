@@ -44,6 +44,7 @@ class WorkQueue extends events.EventEmitter
     @worker_db = db @options.db_index
     @workers = {}
     @runners = {}
+    @sticky = {}
     @resume.on 'message', (channel, key) =>
       @workers[key]?.resume()
     @resume.subscribe "resume_#{@options.db_index}"
@@ -68,7 +69,7 @@ class WorkQueue extends events.EventEmitter
       debug.log "queue: job: #{JSON.stringify(str)}"
       throw err if err
       return @quit() if str == '!quit'
-      @workers[str] = new Worker(str, this)
+      @workers[str] = new Worker(str, this, @sticky)
       @workers[str].run()
       @emit 'next'
   
@@ -86,7 +87,7 @@ class Worker
   # Find the runner for the `@key`. The key is in the format:
   # 
   #     prefix:arg1:arg2:...
-  constructor: (@key, @queue) ->
+  constructor: (@key, @queue, @sticky) ->
     [@prefix, args...] = @key.split consts.arg_sep
     @args = args # weird bug in coffeescript: wanted @args... in line above
     @db = @queue.worker_db
@@ -106,7 +107,11 @@ class Worker
     opts = @opts args
     key = args.join consts.arg_sep
     if @stage < @last_stage
-      @build @cache[key], opts.as
+      value = @build @cache[key], opts.as
+      @sticky[key] = value if opts.sticky
+      value
+    else if @sticky[key]
+      @sticky[key]
     else
       debug.log "worker: add dep: #{key}"
       @deps.push key
