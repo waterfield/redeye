@@ -28,6 +28,7 @@ events = require 'events'
 consts = require './consts'
 db = require './db'
 debug = require './debug'
+_ = require 'underscore'
 
 # Counts the number of simultaneous workers.
 num_workers = 0
@@ -94,6 +95,7 @@ class Worker
     unless @runner = @queue.runners[@prefix]
       throw new Error("no runner for '#{@prefix}'")
     @cache = {}
+    @as = {}
     @last_stage = 0
     num_workers++
 
@@ -102,13 +104,37 @@ class Worker
   # wouldn't be running again). Otherwise, just mark this dependency
   # and return `undefined`.
   get: (args...) ->
+    opts = @opts args
     key = args.join consts.arg_sep
     if @stage < @last_stage
-      @cache[key]
+      @build @cache[key], @as[key]
     else
       debug.log "worker: add dep: #{key}"
+      @as[key] = opts.as
       @deps.push key
       undefined
+  
+  # This is a bit of syntactic sugar. It's the equivalent of:
+  # 
+  #     x = @get key
+  #     @for_reals()
+  #     x
+  get_now: (args...) ->
+    value = @get args...
+    @for_reals()
+    value
+
+  # Extract an optional options hash from a list of arguments
+  opts: (args) ->
+    if typeof(args[args.length-1]) == 'object'
+      args.pop()
+    else
+      {}
+  
+  # If a klass is given, construct a new one; otherwise, just return
+  # the raw value.
+  build: (value, klass) ->
+    if klass? then new klass(value) else value
 
   # Produce `value` as a result for `key`. This both puts the result
   # in redis under the key and tells the dispatcher (via the `responses`
