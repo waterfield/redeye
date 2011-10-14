@@ -132,7 +132,15 @@ class Worker
   # If a klass is given, construct a new one; otherwise, just return
   # the raw value.
   build: (value, klass) ->
-    if klass? then new klass(value) else value
+    if klass? then @bless(new klass(value)) else value
+  
+  # Extend the given object with the context methods of a worker,
+  # in addition to a recursive blessing.
+  bless: (object) ->
+    for method in ['get', 'emit', 'for_reals', 'get_now']
+      object[method] = (args...) => this[method] args...
+    object.bless = (next) => @bless next
+    object
 
   # Produce `value` as a result for `key`. This both puts the result
   # in redis under the key and tells the dispatcher (via the `responses`
