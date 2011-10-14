@@ -95,7 +95,6 @@ class Worker
     unless @runner = @queue.runners[@prefix]
       throw new Error("no runner for '#{@prefix}'")
     @cache = {}
-    @as = {}
     @last_stage = 0
     num_workers++
 
@@ -107,10 +106,9 @@ class Worker
     opts = @opts args
     key = args.join consts.arg_sep
     if @stage < @last_stage
-      @build @cache[key], @as[key]
+      @build @cache[key], opts.as
     else
       debug.log "worker: add dep: #{key}"
-      @as[key] = opts.as
       @deps.push key
       undefined
   
