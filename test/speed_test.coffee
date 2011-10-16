@@ -22,6 +22,6 @@ module.exports = redeye_suite
     expect: ->
       dt = new Date().getTime() - start_time
       @db.get 'n:1000', (err, str) =>
-        @assert.equal str, 1000
-        @assert.equal true,  (dt < 3000)
+        @assert.equal str, '1000'
+        @assert.equal true,  (dt < 2000)
         @finish()
