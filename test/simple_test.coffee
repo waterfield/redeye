@@ -65,9 +65,13 @@ module.exports = redeye_suite
         a + b
 
     setup: ->
+      @start_time = new Date().getTime()
       @request 'fib', 8
 
+    # Make sure it gets the right answer. Also that it's speedy!
     expect: ->
+      dt = new Date().getTime() - @start_time
       @db.get 'fib:8', (err, str) =>
         @assert.equal str, '34'
+        @assert.equal true, (dt < 500)
         @finish()
