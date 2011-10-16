@@ -3,7 +3,7 @@ redeye_suite = require './support/redeye_suite'
 module.exports = redeye_suite
 
   # Tests that multiple requests are just satisfied once
-  'test result and audit log':
+  'test repeated key requests':
   
     workers:
       # Job 'a' has 3 separate requirements on 'b'

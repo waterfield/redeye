@@ -3,7 +3,7 @@ redeye_suite = require './support/redeye_suite'
 module.exports = redeye_suite 
 
   # Test that the idle handler is called.
-  'idle test':
+  'cycle test':
   
     workers:
       # 'a' depends on 'b', and 'b' on 'c'

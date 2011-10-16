@@ -2,11 +2,14 @@ redeye_suite = require './support/redeye_suite'
 
 module.exports = redeye_suite
 
-  # Tests the audit trail produced by the dispatcher
+  # Tests that the sticky cache is working.
   'test the sticky cache':
   
     workers:
+      # Make sure requesting something already stickied will
+      # use that value and not request it from the dispatcher.
       a: -> @sticky.z = 216; @get 'z'
+      # Make sure a stickied request gets stored in the cache.
       b: -> @get_now 'c', sticky: true; @sticky.c
       c: -> 42
       all: -> @get 'a'; @get 'b'; @for_reals()
@@ -15,9 +18,7 @@ module.exports = redeye_suite
     setup: ->
       @request 'all'
 
-    # Assert that the correct dependency graph is generated in
-    # the audit log. Note that there are exactly two valid
-    # total orderings of the dependency graph produced above.
+    # Assert that the sticky tests are set to the right values.
     expect: ->
       @db.mget 'a', 'b', (err, [a,b]) =>
         @assert.equal a, 216

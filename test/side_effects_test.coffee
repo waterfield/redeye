@@ -3,7 +3,7 @@ redeye_suite = require './support/redeye_suite'
 module.exports = redeye_suite
 
   # Tests that side effects can be required without an explicit worker
-  'test result and audit log':
+  'test emitted side effects':
   
     workers:
       # 'a' depends on both 'b' and 'c'. Notice that we call `@for_reals`
