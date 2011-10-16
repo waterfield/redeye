@@ -1,5 +1,4 @@
 consts = require './consts'
-debug = require './debug'
 Doctor = require './doctor'
 db = require('./db')
 _ = require 'underscore'
@@ -34,7 +33,6 @@ class Dispatcher
   # recorded as dependencies, and any new key requests are
   # turned into new jobs.
   requested: (str) ->
-    debug.log "dispatcher: requested: #{str}"
     [source, keys...] = str.split consts.key_sep
     if keys.length
       @audit "?#{str}"
@@ -46,7 +44,6 @@ class Dispatcher
   # key are updated, and if they have no more dependencies, are
   # signalled to run again.
   responded: (key) ->
-    debug.log "dispatcher: responded: #{key}"
     @audit "!#{key}"
     @state[key] = 'done'
     targets = @deps[key] ? []
@@ -60,13 +57,11 @@ class Dispatcher
   # The given key is a 'seed' request. In test mode, completion of
   # the seed request signals termination of the workers.
   seed: (key) ->
-    debug.log "dispatcher: seed: #{key}"
     @_seed = key
     @new_request '!seed', [key]
   
   # The seed request was completed. In test mode, quit the workers.
   unseed: ->
-    debug.log "dispatcher: unseed"
     @quit() if @test_mode
   
   # Send quit signals to the work queues.
@@ -104,7 +99,6 @@ class Dispatcher
   # Activate a handler for idle timeouts. By default, this means
   # calling the doctor.
   idle: ->
-    debug.log "dispatcher: idling"
     if @idle_handler
       @idle_handler()
     else
@@ -112,7 +106,6 @@ class Dispatcher
   
   # Let the doctor figure out what's wrong here
   call_doctor: ->
-    debug.log "dispatcher: calling the doctor"
     @doc ?= new Doctor @deps, @state, @_seed
     @doc.diagnose()
     #@doc.report()
@@ -129,7 +122,6 @@ class Dispatcher
     @reqs = []
     @reset_timeout()
     @count[source] = 0
-    debug.log "dispatcher: new_request: source:", source, "keys:", keys
     @handle_request source, keys
 
   # Handle the requested keys by marking them as dependencies
@@ -140,7 +132,6 @@ class Dispatcher
     if @count[source]
       @request_dependencies()
     else
-      debug.log "dispatcher: already satisfied: #{source}"
       @reschedule source
 
   # Mark the key as a dependency of the given source job. If
@@ -150,7 +141,6 @@ class Dispatcher
     switch @state[key]
       when 'done' then return
       when undefined then @reqs.push key
-    debug.log "dispatcher: #{source} now depends on #{key}"
     (@deps[key] ?= []).push source
     @count[source]++
 
@@ -158,7 +148,6 @@ class Dispatcher
   # them onto the `jobs` queue.
   request_dependencies: ->
     for req in @reqs
-      debug.log "dispatcher: asking for: #{req}"
       @state[req] = 'wait'
       @db.rpush 'jobs', req
       

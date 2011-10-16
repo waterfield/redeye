@@ -29,7 +29,6 @@
 # Dependencies.
 dispatcher = require 'dispatcher'
 redeye = require 'redeye'
-debug = require 'debug'
 consts = require 'consts'
 AuditListener = require './audit_listener'
 db = require 'db'
@@ -54,7 +53,6 @@ class RedeyeTest
   # the WorkQueue we control.
   add_workers: ->
     for name, fun of @workers ? {}
-      debug.log "test: adding worker: #{name}"
       @queue.worker name, fun
 
   # Run the test. This differs from a normal expresso test in the following ways:
