@@ -4,7 +4,7 @@ module.exports = redeye_suite
 
   # Tests that a pathological 1000-step case is still fast
   # (usually clocks in at < 1ms per iteration. not bad!)
-  'test result and audit log':
+  'test speed':
   
     workers:
       # 'n' just counts down
