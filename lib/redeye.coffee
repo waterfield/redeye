@@ -103,12 +103,12 @@ class Worker
   get: (args...) ->
     opts = @opts args
     key = args.join consts.arg_sep
-    if @stage < @last_stage
+    if @sticky[key]
+      @sticky[key]
+    else if @stage < @last_stage
       value = @build @cache[key], opts.as
       @sticky[key] = value if opts.sticky
       value
-    else if @sticky[key]
-      @sticky[key]
     else
       @deps.push key
       undefined

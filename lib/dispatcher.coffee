@@ -62,6 +62,7 @@ class Dispatcher
   
   # The seed request was completed. In test mode, quit the workers.
   unseed: ->
+    @clear_timeout()
     @quit() if @test_mode
   
   # Send quit signals to the work queues.
@@ -108,7 +109,7 @@ class Dispatcher
   call_doctor: ->
     @doc ?= new Doctor @deps, @state, @_seed
     @doc.diagnose()
-    #@doc.report()
+    @doc.report()
   
   # Signal a job to run again by sending a resume message
   reschedule: (key) ->

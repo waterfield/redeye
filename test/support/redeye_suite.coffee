@@ -33,7 +33,7 @@ consts = require 'consts'
 AuditListener = require './audit_listener'
 db = require 'db'
 
-db_index = 0
+db_index = 4
 
 # Test class for replacing a single expresso test.
 class RedeyeTest
