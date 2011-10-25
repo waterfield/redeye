@@ -27,11 +27,11 @@
 # You can see examples in `redeye/test/*_test.coffee`.
 
 # Dependencies.
-dispatcher = require 'dispatcher'
-redeye = require 'redeye'
-consts = require 'consts'
+dispatcher = require '../../lib/dispatcher'
+redeye = require '../../lib/redeye'
+consts = require '../../lib/consts'
 AuditListener = require './audit_listener'
-db = require 'db'
+db = require '../../lib/db'
 
 db_index = 4
 
@@ -85,7 +85,18 @@ class RedeyeTest
   request: (args...) ->
     key = args.join consts.arg_sep
     @db.publish "requests_#{@db_index}", key
+  
+  # Set a redis value, but first convert to JSON
+  set: (args..., value) ->
+    key = args.join consts.arg_sep
+    @db.set key, JSON.stringify(value)
 
+  # Look up and de-jsonify a value from redis
+  get: (args..., callback) ->
+    key = args.join consts.arg_sep
+    @db.get key, (err, str) ->
+      throw err if err
+      callback JSON.parse(str)
 
 # This file exports a method which replaces
 # a whole set of tests. See the comment at the
@@ -93,6 +104,7 @@ class RedeyeTest
 # for examples.
 module.exports = (tests) ->
   for name, test of tests
-    tests[name] = (exit, assert) ->
-      new RedeyeTest(test, exit, assert).run()
+    do (name, test) ->
+      tests[name] = (exit, assert) ->
+        new RedeyeTest(test, exit, assert).run()
   tests

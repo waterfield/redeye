@@ -91,7 +91,7 @@ class Worker
     @req_channel = "requests_#{@queue.options.db_index}"
     @resp_channel = "responses_#{@queue.options.db_index}"
     unless @runner = @queue.runners[@prefix]
-      throw new Error("no runner for '#{@prefix}'")
+      throw new Error("no runner for '#{@prefix}' (#{@key})")
     @cache = {}
     @last_stage = 0
     num_workers++
@@ -138,8 +138,9 @@ class Worker
   # Extend the given object with the context methods of a worker,
   # in addition to a recursive blessing.
   bless: (object) ->
+    me = this
     for method in ['get', 'emit', 'for_reals', 'get_now']
-      object[method] = (args...) => this[method] args...
+      do (method) -> object[method] = (args...) => me[method].apply me, args
     object.bless = (next) => @bless next
     object
 
@@ -157,9 +158,9 @@ class Worker
   # that our dependencies are met).
   for_reals: ->
     if @stage == @last_stage
-      throw 'resolve'
-    else
-      @stage++
+      throw 'resolve' if @deps.length
+      @last_stage++
+    @stage++
 
   # Attempt to run the runner function. If a call to `@for_reals` causes
   # us to abort, then attempt to resolve the dependencies.
