@@ -28,6 +28,7 @@ events = require 'events'
 consts = require './consts'
 db = require './db'
 _ = require 'underscore'
+require './util'
 
 # Counts the number of simultaneous workers.
 num_workers = 0
@@ -46,7 +47,7 @@ class WorkQueue extends events.EventEmitter
     @sticky = {}
     @resume.on 'message', (channel, key) =>
       @workers[key]?.resume()
-    @resume.subscribe "resume_#{@options.db_index}"
+    @resume.subscribe _('resume').namespace(@options.db_index)
     @on 'next', => @next()
   
   # Run the work queue, calling the given callback on completion
@@ -88,8 +89,8 @@ class Worker
     [@prefix, args...] = @key.split consts.arg_sep
     @args = args # weird bug in coffeescript: wanted @args... in line above
     @db = @queue.worker_db
-    @req_channel = "requests_#{@queue.options.db_index}"
-    @resp_channel = "responses_#{@queue.options.db_index}"
+    @req_channel = _('requests').namespace @queue.options.db_index
+    @resp_channel = _('responses').namespace @queue.options.db_index
     unless @runner = @queue.runners[@prefix]
       throw new Error("no runner for '#{@prefix}' (#{@key})")
     @cache = {}
@@ -101,7 +102,7 @@ class Worker
   # wouldn't be running again). Otherwise, just mark this dependency
   # and return `undefined`.
   get: (args...) ->
-    opts = @opts args
+    opts = _(args).opts()
     key = args.join consts.arg_sep
     if @sticky[key]
       @sticky[key]
@@ -123,13 +124,6 @@ class Worker
     @for_reals()
     value
 
-  # Extract an optional options hash from a list of arguments
-  opts: (args) ->
-    if typeof(args[args.length-1]) == 'object'
-      args.pop()
-    else
-      {}
-  
   # If a klass is given, construct a new one; otherwise, just return
   # the raw value.
   build: (value, klass) ->

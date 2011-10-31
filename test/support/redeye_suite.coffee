@@ -32,6 +32,8 @@ redeye = require '../../lib/redeye'
 consts = require '../../lib/consts'
 AuditListener = require './audit_listener'
 db = require '../../lib/db'
+_ = require 'underscore'
+require '../../lib/util'
 
 db_index = 4
 
@@ -84,7 +86,7 @@ class RedeyeTest
   # Send a request to the correct `requests` channel
   request: (args...) ->
     key = args.join consts.arg_sep
-    @db.publish "requests_#{@db_index}", key
+    @db.publish _('requests').namespace(@db_index), key
   
   # Set a redis value, but first convert to JSON
   set: (args..., value) ->

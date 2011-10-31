@@ -2,6 +2,7 @@ consts = require './consts'
 Doctor = require './doctor'
 db = require('./db')
 _ = require 'underscore'
+require './util'
 
 # The dispatcher accepts requests for keys and manages the
 # dependencies between jobs. It ensures that the same work
@@ -17,7 +18,7 @@ class Dispatcher
     @db = db @options.db_index
     @req = db @options.db_index
     @res = db @options.db_index
-    @resume_channel = "resume_#{@options.db_index}"
+    @resume_channel = _('resume').namespace @options.db_index
     @count = {}
     @state = {}
     @deps = {}
@@ -26,8 +27,8 @@ class Dispatcher
   listen: ->
     @req.on 'message', (ch, str) => @requested str
     @res.on 'message', (ch, str) => @responded str
-    @req.subscribe "requests_#{@options.db_index}"
-    @res.subscribe "responses_#{@options.db_index}"
+    @req.subscribe _('requests').namespace(@options.db_index)
+    @res.subscribe _('responses').namespace(@options.db_index)
 
   # Called when a worker requests keys. The keys requested are
   # recorded as dependencies, and any new key requests are
