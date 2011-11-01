@@ -65,7 +65,9 @@ class WorkQueue extends events.EventEmitter
   # You can push the job `!quit` to make the work queue die.
   next: ->
     @db.blpop 'jobs', 0, (err, [key, str]) =>
-      throw err if err
+      if err
+        @emit 'next'
+        return @error err
       return @quit() if str == '!quit'
       @workers[str] = new Worker(str, this, @sticky)
       @workers[str].run()
@@ -77,6 +79,11 @@ class WorkQueue extends events.EventEmitter
     @resume.end()
     @worker_db.end()
     @callback?()
+  
+  # Mark that a fatal exception occurred
+  error: (err) ->
+    console.log err.stack
+    @db.set 'fatal', err
 
 
 # The worker class is the context under which runner functions are run.
@@ -105,7 +112,9 @@ class Worker
     opts = _(args).opts()
     key = args.join consts.arg_sep
     if @sticky[key]
-      @sticky[key]
+      value = @sticky[key]
+      @bless value if opts.as
+      value
     else if @stage < @last_stage
       value = @build @cache[key], opts.as
       @sticky[key] = value if opts.sticky
@@ -181,7 +190,12 @@ class Worker
     if err == 'resolve'
       @resolve()
     else
-      throw err
+      @error err
+
+  # Mark that a fatal exception occurred
+  error: (err) ->
+    console.log err.stack
+    @db.set 'fatal', err
 
   # Call the runner. If it gets all the way through, first check if there
   # were any unmet dependencies after the last `@for_reals`. If so, we force
@@ -214,8 +228,9 @@ class Worker
   # send a request to the dispatcher; otherwise, resume trying to run the
   # main function.
   get_deps: ->
+    throw "No dependencies to get: #{@key}" unless @deps.length
     @db.mget @deps, (err, arr) =>
-      throw err if err
+      return @error err if err
       bad = @check_values arr
       if bad.length
         @request_missing bad

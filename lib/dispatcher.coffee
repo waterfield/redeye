@@ -32,14 +32,23 @@ class Dispatcher
 
   # Called when a worker requests keys. The keys requested are
   # recorded as dependencies, and any new key requests are
-  # turned into new jobs.
+  # turned into new jobs. You can request the key `!reset` in
+  # order to flush the dependency graph.
   requested: (str) ->
     [source, keys...] = str.split consts.key_sep
     if keys.length
       @audit "?#{str}"
       @new_request source, keys
+    else if source == '!reset'
+      @reset()
     else
       @seed source
+  
+  # Forget everything we know about dependency state.
+  reset: ->
+    @count = {}
+    @state = {}
+    @deps = {}
   
   # Called when a key is completed. Any jobs depending on this
   # key are updated, and if they have no more dependencies, are
