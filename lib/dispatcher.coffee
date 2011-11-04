@@ -117,6 +117,7 @@ class Dispatcher
   
   # Let the doctor figure out what's wrong here
   call_doctor: ->
+    console.log "Oops... calling the doctor!"
     @doc ?= new Doctor @deps, @state, @_seed
     @doc.diagnose()
     @doc.report()
