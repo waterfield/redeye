@@ -69,8 +69,11 @@ class WorkQueue extends events.EventEmitter
         @emit 'next'
         return @error err
       return @quit() if str == '!quit'
-      @workers[str] = new Worker(str, this, @sticky)
-      @workers[str].run()
+      try
+        @workers[str] = new Worker(str, this, @sticky)
+        @workers[str].run()
+      catch e
+        console.log e.stack
       @emit 'next'
   
   # Shut down the redis connection and stop running workers
@@ -83,7 +86,7 @@ class WorkQueue extends events.EventEmitter
   # Mark that a fatal exception occurred
   error: (err) ->
     console.log err.stack
-    @db.set 'fatal', err
+    @db.set 'fatal', err.stack
 
 
 # The worker class is the context under which runner functions are run.
@@ -99,6 +102,7 @@ class Worker
     @req_channel = _('requests').namespace @queue.options.db_index
     @resp_channel = _('responses').namespace @queue.options.db_index
     unless @runner = @queue.runners[@prefix]
+      @emit @key, null
       throw new Error("no runner for '#{@prefix}' (#{@key})")
     @cache = {}
     @last_stage = 0
@@ -111,6 +115,7 @@ class Worker
   get: (args...) ->
     opts = _(args).opts()
     key = args.join consts.arg_sep
+    console.log @key, key, @stage, @last_stage # XXX
     if @sticky[key]
       value = @sticky[key]
       @bless value if opts.as
@@ -195,7 +200,7 @@ class Worker
   # Mark that a fatal exception occurred
   error: (err) ->
     console.log err.stack
-    @db.set 'fatal', err
+    @db.set 'fatal', err.stack
 
   # Call the runner. If it gets all the way through, first check if there
   # were any unmet dependencies after the last `@for_reals`. If so, we force
@@ -227,12 +232,12 @@ class Worker
   # Ask redis to provide values for our dependencies. If any are missing,
   # send a request to the dispatcher; otherwise, resume trying to run the
   # main function.
-  get_deps: ->
+  get_deps: (force = false) ->
     throw "No dependencies to get: #{@key}" unless @deps.length
     @db.mget @deps, (err, arr) =>
       return @error err if err
       bad = @check_values arr
-      if bad.length
+      if bad.length && !force
         @request_missing bad
       else
         @run()
@@ -247,7 +252,7 @@ class Worker
 
   # The dispatcher said to resume, so go look for the missing values again.
   resume: ->
-    @get_deps()
+    @get_deps true
 
 
 module.exports =
