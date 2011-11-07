@@ -73,7 +73,7 @@ class WorkQueue extends events.EventEmitter
         @workers[str] = new Worker(str, this, @sticky)
         @workers[str].run()
       catch e
-        console.log e.stack
+        @error e
       @emit 'next'
   
   # Shut down the redis connection and stop running workers
@@ -82,11 +82,16 @@ class WorkQueue extends events.EventEmitter
     @resume.end()
     @worker_db.end()
     @callback?()
+    
+  # Mark the given worker as finished (release its memory)
+  finish: (key) ->
+    delete @workers[key]
   
   # Mark that a fatal exception occurred
   error: (err) ->
-    console.log err.stack
-    @db.set 'fatal', err.stack
+    message = err.stack ? err
+    console.log message
+    @db.set 'fatal', message
 
 
 # The worker class is the context under which runner functions are run.
@@ -198,19 +203,21 @@ class Worker
 
   # Mark that a fatal exception occurred
   error: (err) ->
-    console.log err.stack
-    @db.set 'fatal', err.stack
+    message = err.stack ? err
+    console.log message
+    @db.set 'fatal', message
 
   # Call the runner. If it gets all the way through, first check if there
   # were any unmet dependencies after the last `@for_reals`. If so, we force
   # one last dependency resolution. Otherwise, we optionally
   # emit the result of the function (if nothing has been emitted yet).
   process: ->
-    console.log "->", @key # XXX
+    #console.log "->", @key # XXX
     result = @runner.apply this, @args
     return @resolve() if @deps.length
-    console.log "<-", @key
+    #console.log "<-", @key # XXX
     num_workers--
+    @queue.finish @key
     if result? && !@emitted
       @emit @key, result
 
@@ -235,7 +242,7 @@ class Worker
   # main function.
   get_deps: (force = false) ->
     throw "No dependencies to get: #{@key}" unless @deps.length
-    console.log " ?", @key, @deps # XXX
+    #console.log " ?", @key, @deps # XXX
     @db.mget @deps, (err, arr) =>
       return @error err if err
       bad = @check_values arr
@@ -249,7 +256,7 @@ class Worker
   # on a resume key. Once we get that response, try again to fetch the
   # dependencies (which should all be present).
   request_missing: (keys) ->
-    console.log " !", @key, keys # XXX
+    #console.log " !", @key, keys # XXX
     request = [@key, keys...].join consts.key_sep
     @db.publish @req_channel, request
 

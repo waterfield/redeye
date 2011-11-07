@@ -22,6 +22,7 @@
   "main": "server",
   "dependencies": {
     "coffee-script": "1.1",
+    "hiredis": "0.1",
     "redis": "0.6",
     "vows": "0.5",
     "expresso": "0.9",
