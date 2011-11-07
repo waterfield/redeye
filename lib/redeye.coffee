@@ -95,6 +95,8 @@ class WorkQueue extends events.EventEmitter
 
 
 # The worker class is the context under which runner functions are run.
+# 
+# FIXME: @keys and @get_now don't work with @async !!
 class Worker
 
   # Find the runner for the `@key`. The key is in the format:
@@ -113,6 +115,12 @@ class Worker
     @saved_keys = {}
     @last_stage = 0
     num_workers++
+  
+  # Mark the worker as asynchronous. If a callback is provided, it's
+  # run in the context of the worker.
+  async: (callback) ->
+    @is_async = true
+    callback.apply this if typeof(callback) == 'function'
 
   # If we've already seen this `@get` before, then return the actual
   # value we've received (which we know we got because otherwise we
@@ -179,9 +187,15 @@ class Worker
   # that our dependencies are met).
   for_reals: ->
     if @stage == @last_stage
-      throw 'resolve' if @deps.length
+      if @deps.length
+        if @is_async
+          @resolve()
+          return false          
+        else
+          throw 'resolve'
       @last_stage++
     @stage++
+    true
 
   # Attempt to run the runner function. If a call to `@for_reals` causes
   # us to abort, then attempt to resolve the dependencies.
@@ -197,11 +211,14 @@ class Worker
   # * `@stage`: how many calls to `@for_reals` we've seen
   # * `@deps`: a list of new dependencies
   # * `@emitted`: whether `@emit` has been called.
+  # * `@search`: the key search currently requested
+  # * `@is_async`: whether the worker is in async mode
   clear: ->
     @stage = 0
     @deps = []
     @emitted = false
     @search = null
+    @is_async = false
 
   # If the caught error is from a `@for_reals`, then try to resolve
   # dependencies.
@@ -225,6 +242,10 @@ class Worker
     #console.log "->", @key # XXX
     result = @runner.apply this, @args
     return @resolve() if @deps.length
+    @finish result unless @is_async
+  
+  # We're done!
+  finish: (result) ->
     #console.log "<-", @key # XXX
     num_workers--
     @queue.finish @key
