@@ -110,6 +110,7 @@ class Worker
       @emit @key, null
       throw new Error("no runner for '#{@prefix}' (#{@key})")
     @cache = {}
+    @saved_keys = {}
     @last_stage = 0
     num_workers++
 
@@ -132,6 +133,14 @@ class Worker
       @deps.push key
       undefined
   
+  # Search for the given keys in the database, then remember them.
+  keys: (str) ->
+    if @saved_keys[str]
+      @saved_keys[str]
+    else
+      @search = str
+      throw 'resolve'
+  
   # This is a bit of syntactic sugar. It's the equivalent of:
   # 
   #     x = @get key
@@ -151,7 +160,7 @@ class Worker
   # in addition to a recursive blessing.
   bless: (object) ->
     me = this
-    for method in ['get', 'emit', 'for_reals', 'get_now']
+    for method in ['get', 'emit', 'for_reals', 'get_now', 'keys']
       do (method) -> object[method] = (args...) => me[method].apply me, args
     object.bless = (next) => @bless next
     object
@@ -192,6 +201,7 @@ class Worker
     @stage = 0
     @deps = []
     @emitted = false
+    @search = null
 
   # If the caught error is from a `@for_reals`, then try to resolve
   # dependencies.
@@ -234,8 +244,13 @@ class Worker
   # to record that there's one more of them to get through, then to check
   # the dependencies.
   resolve: ->
-    @last_stage++
-    @get_deps()
+    if @search
+      @db.keys @search, (e, keys) =>
+        @saved_keys[@search] = keys
+        @run()
+    else
+      @last_stage++
+      @get_deps()
 
   # Ask redis to provide values for our dependencies. If any are missing,
   # send a request to the dispatcher; otherwise, resume trying to run the
