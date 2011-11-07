@@ -9,16 +9,19 @@ module.exports = redeye_suite
       a: ->
         @db.set 'foo', '5'
         @async ->
-          @db.get 'foo', (e, val) =>
-            @finish(2 * parseInt(val))
+          @db.get 'foo', (e, foo) =>
+            bar = @get 'bar'
+            return unless @for_reals()
+            @finish parseInt(foo) * bar
 
     # Set the 'x:*' keys, then request a sum
     setup: ->
+      @set 'bar', '7'
       @request 'a'
 
     # Assert that the doctor ran, and that it detected
     # our cyclic dependency.
     expect: ->
       @get 'a', (a) =>
-        @assert.equal a, 10
+        @assert.equal a, 35
         @finish()
