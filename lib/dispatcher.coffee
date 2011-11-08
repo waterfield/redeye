@@ -13,6 +13,7 @@ class Dispatcher
   # Initializer
   constructor: (@options) ->
     @test_mode = @options.test_mode
+    @verbose = @options.verbose
     @idle_timeout = @options.idle_timeout ? (if @test_mode then 500 else 10000)
     @audit_stream = @options.audit
     @db = db @options.db_index
@@ -22,6 +23,7 @@ class Dispatcher
     @count = {}
     @state = {}
     @deps = {}
+    @unmet = 0
 
   # Subscribe to the `requests` and `responses` channels.
   listen: ->
@@ -29,6 +31,11 @@ class Dispatcher
     @res.on 'message', (ch, str) => @responded str
     @req.subscribe _('requests').namespace(@options.db_index)
     @res.subscribe _('responses').namespace(@options.db_index)
+    setInterval (=> @status()), 1000
+  
+  # Print a status report.
+  status: ->
+    @tick('' + @unmet)
 
   # Called when a worker requests keys. The keys requested are
   # recorded as dependencies, and any new key requests are
@@ -58,6 +65,7 @@ class Dispatcher
     @state[key] = 'done'
     targets = @deps[key] ? []
     delete @deps[key]
+    @tick '!'
     @progress targets
 
   # Write text to the audit stream
@@ -68,6 +76,7 @@ class Dispatcher
   # the seed request signals termination of the workers.
   seed: (key) ->
     @_seed = key
+    @tick 'S'
     @new_request '!seed', [key]
   
   # The seed request was completed. In test mode, quit the workers.
@@ -92,6 +101,7 @@ class Dispatcher
   # zero, it is rescheduled.
   progress: (keys) ->
     for key in keys
+      @unmet--
       unless --@count[key]
         @reschedule key
   
@@ -117,7 +127,7 @@ class Dispatcher
   
   # Let the doctor figure out what's wrong here
   call_doctor: ->
-    #console.log "Oops... calling the doctor!"
+    console.log "Oops... calling the doctor!" if @verbose
     @doc ?= new Doctor @deps, @state, @_seed
     @doc.diagnose()
     @doc.report()
@@ -126,6 +136,7 @@ class Dispatcher
   reschedule: (key) ->
     delete @count[key]
     return @unseed() if key == '!seed'
+    @tick '/'
     @db.publish @resume_channel, key
   
   # Handle a request we've never seen before from a given source
@@ -134,6 +145,7 @@ class Dispatcher
     @reqs = []
     @reset_timeout()
     @count[source] = 0
+    @tick '.'
     @handle_request source, keys
 
   # Handle the requested keys by marking them as dependencies
@@ -154,14 +166,20 @@ class Dispatcher
       when 'done' then return
       when undefined then @reqs.push key
     (@deps[key] ?= []).push source
+    @unmet++
     @count[source]++
 
   # Take the unmet dependencies from the latest request and push
   # them onto the `jobs` queue.
   request_dependencies: ->
     for req in @reqs
+      @tick '+'
       @state[req] = 'wait'
       @db.rpush 'jobs', req
+  
+  # Make a little note
+  tick: (sym) ->
+    process.stdout.write(sym) if @verbose
       
 
 module.exports =

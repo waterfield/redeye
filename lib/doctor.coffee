@@ -16,8 +16,20 @@ class Doctor
 
   # Print a report about what's broken
   report: ->
+    # @report_deps()
+    # @report_state()
     @report_loose_ends()
     @report_cycles()
+  
+  # Print out the dependencies
+  report_deps: ->
+    for key, values of @inv
+      console.log "#{key} -> #{values.join ', '}"
+  
+  # Report on the state of affairs
+  report_state: ->
+    for key, state of @state
+      console.log "#{key} :: #{state}"
   
   # Print out a list of cyclic dependencies. For instance,
   # 
@@ -33,7 +45,7 @@ class Doctor
   # Report on loose ends, that is, unsatisfied dependencies that
   # aren't part of cycles.
   report_loose_ends: ->
-    return unless @loose_ends.count
+    return unless @loose_ends.length
     console.log "Loose ends: #{@loose_ends.join(', ')}"
 
   # Reset the doctor's diagnosis for another run.

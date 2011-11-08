@@ -239,14 +239,12 @@ class Worker
   # one last dependency resolution. Otherwise, we optionally
   # emit the result of the function (if nothing has been emitted yet).
   process: ->
-    #console.log "->", @key # XXX
     result = @runner.apply this, @args
     return @resolve() if @deps.length
     @finish result unless @is_async
   
   # We're done!
   finish: (result) ->
-    #console.log "<-", @key # XXX
     num_workers--
     @queue.finish @key
     if result? && !@emitted
@@ -278,7 +276,6 @@ class Worker
   # main function.
   get_deps: (force = false) ->
     throw "No dependencies to get: #{@key}" unless @deps.length
-    #console.log " ?", @key, @deps # XXX
     @db.mget @deps, (err, arr) =>
       return @error err if err
       bad = @check_values arr
@@ -292,7 +289,6 @@ class Worker
   # on a resume key. Once we get that response, try again to fetch the
   # dependencies (which should all be present).
   request_missing: (keys) ->
-    #console.log " !", @key, keys # XXX
     request = [@key, keys...].join consts.key_sep
     @db.publish @req_channel, request
 
