@@ -25,6 +25,5 @@ module.exports = redeye_suite
       dt = new Date().getTime() - @start_time
       @db.get "n:#{big_num}", (err, str) =>
         @assert.equal str, ''+big_num
-        console.log 'done!'
         @assert.equal true,  (dt < 2000)
         @finish()

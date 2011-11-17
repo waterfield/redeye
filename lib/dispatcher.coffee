@@ -31,12 +31,7 @@ class Dispatcher
     @res.on 'message', (ch, str) => @responded str
     @req.subscribe _('requests').namespace(@options.db_index)
     @res.subscribe _('responses').namespace(@options.db_index)
-    setInterval (=> @status()), 1000
   
-  # Print a status report.
-  status: ->
-    @tick('' + @unmet)
-
   # Called when a worker requests keys. The keys requested are
   # recorded as dependencies, and any new key requests are
   # turned into new jobs. You can request the key `!reset` in
@@ -69,7 +64,6 @@ class Dispatcher
     @state[key] = 'done'
     targets = @deps[key] ? []
     delete @deps[key]
-    @tick '!'
     @progress targets
 
   # Write text to the audit stream
@@ -80,7 +74,6 @@ class Dispatcher
   # the seed request signals termination of the workers.
   seed: (key) ->
     @_seed = key
-    @tick 'S'
     @new_request '!seed', [key]
   
   # The seed request was completed. In test mode, quit the workers.
@@ -134,13 +127,12 @@ class Dispatcher
     console.log "Oops... calling the doctor!" if @verbose
     @doc ?= new Doctor @deps, @state, @_seed
     @doc.diagnose()
-    @doc.report()
+    @doc.report() if @verbose
   
   # Signal a job to run again by sending a resume message
   reschedule: (key) ->
     delete @count[key]
     return @unseed() if key == '!seed'
-    @tick '/'
     @db.publish @resume_channel, key
   
   # Handle a request we've never seen before from a given source
@@ -149,7 +141,6 @@ class Dispatcher
     @reqs = []
     @reset_timeout()
     @count[source] = 0
-    @tick '.'
     @handle_request source, keys
 
   # Handle the requested keys by marking them as dependencies
@@ -177,14 +168,9 @@ class Dispatcher
   # them onto the `jobs` queue.
   request_dependencies: ->
     for req in @reqs
-      @tick '+'
       @state[req] = 'wait'
       @db.rpush 'jobs', req
-  
-  # Make a little note
-  tick: (sym) ->
-    process.stdout.write(sym) if @verbose
-      
+        
 
 module.exports =
 
