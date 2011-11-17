@@ -57,6 +57,10 @@ class Dispatcher
     @state = {}
     @deps = {}
   
+  # Print a debugging statement
+  debug: (args...) ->
+    #console.log 'dispatcher:', args...
+  
   # Called when a key is completed. Any jobs depending on this
   # key are updated, and if they have no more dependencies, are
   # signalled to run again.

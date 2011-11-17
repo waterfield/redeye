@@ -92,6 +92,10 @@ class WorkQueue extends events.EventEmitter
     message = err.stack ? err
     console.log message
     @db.set 'fatal', message
+  
+  # Print a debugging statement
+  debug: (args...) ->
+    #console.log 'queue:', args...
 
 
 # The worker class is the context under which runner functions are run.
@@ -122,6 +126,10 @@ class Worker
   async: (callback) ->
     @is_async = true
     callback.apply this if typeof(callback) == 'function'
+  
+  # Print a debugging statement
+  debug: (args...) ->
+    #console.log 'worker:', args...
 
   # If we've already seen this `@get` before, then return the actual
   # value we've received (which we know we got because otherwise we
