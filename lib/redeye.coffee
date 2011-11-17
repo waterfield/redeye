@@ -73,7 +73,7 @@ class WorkQueue extends events.EventEmitter
         @workers[str] = new Worker(str, this, @sticky)
         @workers[str].run()
       catch e
-        @error e
+        @error e unless e == 'no_runner'
       @emit 'next'
   
   # Shut down the redis connection and stop running workers
@@ -110,7 +110,8 @@ class Worker
     @resp_channel = _('responses').namespace @queue.options.db_index
     unless @runner = @queue.runners[@prefix]
       @emit @key, null
-      throw new Error("no runner for '#{@prefix}' (#{@key})")
+      console.log "no runner for '#{@prefix}' (#{@key})"
+      throw 'no_runner'
     @cache = {}
     @saved_keys = {}
     @last_stage = 0
