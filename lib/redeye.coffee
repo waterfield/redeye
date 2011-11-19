@@ -184,6 +184,9 @@ class Worker
     for method in ['get', 'emit', 'for_reals', 'get_now', 'keys']
       do (method) -> object[method] = ->
         Worker.current[method].apply Worker.current, arguments
+    for method, fun of Worker.mixins
+      do (method, fun) -> object[method] = ->
+        fun.apply Worker.current, arguments
     object.bless = (next) => @bless next
     object
 
@@ -315,10 +318,7 @@ class Worker
 # Extend the blessed methods with the given ones, so that
 # worker contexts can use them.
 Worker.mixin = (mixins) ->
-  for name, fun of mixins
-    do (fun) ->
-      Worker.prototype[name] = ->
-        fun.apply Worker.current, arguments
+  _.extend (Worker.mixins ?= {}), mixins
 
 module.exports =
   
