@@ -45,6 +45,7 @@ class WorkQueue extends events.EventEmitter
     @workers = {}
     @runners = {}
     @sticky = {}
+    @mixins = {}
     @resume.on 'message', (channel, key) =>
       @workers[key]?.resume()
     @resume.subscribe _('resume').namespace(@options.db_index)
@@ -96,6 +97,10 @@ class WorkQueue extends events.EventEmitter
   # Print a debugging statement
   debug: (args...) ->
     #console.log 'queue:', args...
+  
+  # Alias for `Worker.mixin`
+  mixin: (mixins) ->
+    Worker.mixin mixins
 
 
 # The worker class is the context under which runner functions are run.
@@ -139,10 +144,9 @@ class Worker
     opts = _(args).opts()
     key = args.join consts.arg_sep
     if @sticky[key]
-      value = @sticky[key]
-      @bless value if opts.as
-      value
+      @sticky[key]
     else if @stage < @last_stage
+      # TODO: move the @build and @sticky[]= into @get_deps
       value = @build @cache[key], opts.as
       @sticky[key] = value if opts.sticky
       value
@@ -163,8 +167,9 @@ class Worker
   #     x = @get key
   #     @for_reals()
   #     x
-  get_now: (args...) ->
-    value = @get args...
+  get_now: ->
+#    console.log 'current:', Worker.current # XXX
+    value = @get.apply this, arguments
     @for_reals()
     value
 
@@ -176,9 +181,9 @@ class Worker
   # Extend the given object with the context methods of a worker,
   # in addition to a recursive blessing.
   bless: (object) ->
-    me = this
     for method in ['get', 'emit', 'for_reals', 'get_now', 'keys']
-      do (method) -> object[method] = (args...) => me[method].apply me, args
+      do (method) -> object[method] = ->
+        Worker.current[method].apply Worker.current, arguments
     object.bless = (next) => @bless next
     object
 
@@ -248,6 +253,7 @@ class Worker
   # one last dependency resolution. Otherwise, we optionally
   # emit the result of the function (if nothing has been emitted yet).
   process: ->
+    Worker.current = this
     result = @runner.apply this, @args
     return @resolve() if @deps.length
     @finish result unless @is_async
@@ -305,6 +311,14 @@ class Worker
   resume: ->
     @get_deps true
 
+
+# Extend the blessed methods with the given ones, so that
+# worker contexts can use them.
+Worker.mixin = (mixins) ->
+  for name, fun of mixins
+    do (fun) ->
+      Worker.prototype[name] = ->
+        fun.apply Worker.current, arguments
 
 module.exports =
   

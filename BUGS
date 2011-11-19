@@ -8,3 +8,4 @@
     > fix: have the blessed methods use something like WorkerQueue.current or some such..
       but how would that get set? hmm, you'd have to totally prevent async abilities
       that bypass the queue, and make sure all queue methods correctly set current
+      > DONE!
