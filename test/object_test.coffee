@@ -9,7 +9,7 @@ class SomeObj
 # This class' object should be recursovely blessed,
 # giving it access to the `@get_now` method.
 class OtherObj
-  do_stuff: -> @get_now 'quux'
+  do_stuff: -> @quux()
 
 module.exports = redeye_suite
 
@@ -28,7 +28,10 @@ module.exports = redeye_suite
       all: (keys...) -> @get key for key in keys; @for_reals()
 
     # Kick off by requesting 'foo' and 'baz'
-    setup: -> @request 'all', 'foo', 'baz'
+    setup: ->
+        @queue.mixin
+          quux: -> @get_now 'quux'
+        @request 'all', 'foo', 'baz'
 
     # Assert that all the keys get set correctly. `bar` should be a JSON blob.
     # `foo` should be twice it's `value` key. `quux` should be just 216, and
