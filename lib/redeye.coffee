@@ -124,7 +124,6 @@ class Worker
     @cache = {}
     @saved_keys = {}
     @sequence = []
-    @seen = {}
     @last_stage = 0
     num_workers++
   
@@ -159,9 +158,6 @@ class Worker
   
   # Make sure the given key is being requested in a totally legal and consistent way.
   check_stage: (key) ->
-    # if !@seen[key]? && (@stage != @last_stage)
-    #   throw "#{@key} is requesting #{key} for the first time, but stage #{@stage} is less than last stage #{@last_stage}"
-    # @seen[key] = true
     if @key_index == @sequence.length
       @sequence.push key
     else
