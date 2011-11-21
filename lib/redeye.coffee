@@ -123,6 +123,8 @@ class Worker
       throw 'no_runner'
     @cache = {}
     @saved_keys = {}
+    @sequence = []
+    @seen = {}
     @last_stage = 0
     num_workers++
   
@@ -143,6 +145,7 @@ class Worker
   get: (args...) ->
     opts = _(args).opts()
     key = args.join consts.arg_sep
+    #@check_stage key
     if @sticky[key]
       @sticky[key]
     else if @stage < @last_stage
@@ -153,6 +156,18 @@ class Worker
     else
       @deps.push key
       undefined
+  
+  # Make sure the given key is being requested in a totally legal and consistent way.
+  check_stage: (key) ->
+    # if !@seen[key]? && (@stage != @last_stage)
+    #   throw "#{@key} is requesting #{key} for the first time, but stage #{@stage} is less than last stage #{@last_stage}"
+    # @seen[key] = true
+    if @key_index == @sequence.length
+      @sequence.push key
+    else
+      if @sequence[@key_index] != key
+        throw "#{@key} has a nondeterministic key sequence; expected #{@sequence[@key_index]}, but got #{key} (sequence: #{JSON.stringify(@sequence)})"
+    @key_index++
   
   # Search for the given keys in the database, then remember them.
   keys: (str) ->
@@ -168,7 +183,6 @@ class Worker
   #     @for_reals()
   #     x
   get_now: ->
-#    console.log 'current:', Worker.current # XXX
     value = @get.apply this, arguments
     @for_reals()
     value
@@ -232,6 +246,7 @@ class Worker
   # * `@is_async`: whether the worker is in async mode
   clear: ->
     @stage = 0
+    @key_index = 0
     @deps = []
     @emitted = false
     @search = null
