@@ -56,8 +56,8 @@ class WorkQueue extends events.EventEmitter
       @workers[key]?.resume()
       @resume.subscribe _('resume').namespace(@options.db_index)
 
-    @control.on 'message', (channel, action) => @perform message
-    @control.subscribe _('control').namespace(@options.action)
+    @control.on 'message', (channel, action) => @perform action
+    @control.subscribe _('control').namespace(@options.db_index)
   
   # React to a control message sent by the dispatcher
   perform: (action) ->
@@ -84,7 +84,6 @@ class WorkQueue extends events.EventEmitter
         @emit 'next'
         return @error err
       try
-        return if str == '!quit'
         @workers[str] = new Worker(str, this, @sticky)
         @workers[str].run()
       catch e
@@ -93,7 +92,6 @@ class WorkQueue extends events.EventEmitter
   
   # Shut down the redis connection and stop running workers
   quit: ->
-    console.log 'work queue quitting' # XXX
     @db.end()
     @resume.end()
     @control.end()

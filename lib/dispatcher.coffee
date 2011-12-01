@@ -86,9 +86,6 @@ class Dispatcher
   # Send quit signals to the work queues.
   quit: ->
     @clear_timeout()
-    for i in [1..100]
-      @db.rpush 'jobs', '!quit'
-    console.log 'dispatcher quitting', @control_channel # XXX
     @db.publish @control_channel, 'quit'
     finish = =>
       @db.del 'jobs'
