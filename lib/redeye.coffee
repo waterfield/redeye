@@ -54,7 +54,7 @@ class WorkQueue extends events.EventEmitter
   listen: ->
     @resume.on 'message', (channel, key) =>
       @workers[key]?.resume()
-      @resume.subscribe _('resume').namespace(@options.db_index)
+    @resume.subscribe _('resume').namespace(@options.db_index)
 
     @control.on 'message', (channel, action) => @perform action
     @control.subscribe _('control').namespace(@options.db_index)
