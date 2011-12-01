@@ -41,15 +41,29 @@ class WorkQueue extends events.EventEmitter
   constructor: (@options) ->
     @db = db @options.db_index
     @resume = db @options.db_index
+    @control = db @options.db_index
     @worker_db = db @options.db_index
     @workers = {}
     @runners = {}
     @sticky = {}
     @mixins = {}
+    @listen()
+    @on 'next', => @next()
+  
+  # Subscribe to channels
+  listen: ->
     @resume.on 'message', (channel, key) =>
       @workers[key]?.resume()
-    @resume.subscribe _('resume').namespace(@options.db_index)
-    @on 'next', => @next()
+      @resume.subscribe _('resume').namespace(@options.db_index)
+
+    @control.on 'message', (channel, action) => @perform message
+    @control.subscribe _('control').namespace(@options.action)
+  
+  # React to a control message sent by the dispatcher
+  perform: (action) ->
+    switch action
+      when 'quit' then @quit()
+      when 'reset' then @reset()
   
   # Run the work queue, calling the given callback on completion
   run: (@callback) ->
@@ -69,8 +83,8 @@ class WorkQueue extends events.EventEmitter
       if err
         @emit 'next'
         return @error err
-      return @quit() if str == '!quit'
       try
+        return if str == '!quit'
         @workers[str] = new Worker(str, this, @sticky)
         @workers[str].run()
       catch e
@@ -79,10 +93,16 @@ class WorkQueue extends events.EventEmitter
   
   # Shut down the redis connection and stop running workers
   quit: ->
+    console.log 'work queue quitting' # XXX
     @db.end()
     @resume.end()
+    @control.end()
     @worker_db.end()
     @callback?()
+  
+  # Clean out the sticky cache
+  reset: ->
+    @sticky = {}
     
   # Mark the given worker as finished (release its memory)
   finish: (key) ->

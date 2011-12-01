@@ -20,6 +20,7 @@ class Dispatcher
     @req = db @options.db_index
     @res = db @options.db_index
     @resume_channel = _('resume').namespace @options.db_index
+    @control_channel = _('control').namespace @options.db_index
     @count = {}
     @state = {}
     @deps = {}
@@ -51,6 +52,7 @@ class Dispatcher
     @count = {}
     @state = {}
     @deps = {}
+    @db.publish @control_channel, 'reset'
   
   # Print a debugging statement
   debug: (args...) ->
@@ -86,6 +88,8 @@ class Dispatcher
     @clear_timeout()
     for i in [1..100]
       @db.rpush 'jobs', '!quit'
+    console.log 'dispatcher quitting', @control_channel # XXX
+    @db.publish @control_channel, 'quit'
     finish = =>
       @db.del 'jobs'
       @req.end()
