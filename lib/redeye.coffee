@@ -173,6 +173,15 @@ class Worker
       value
     else
       @deps.push key
+      @blank()
+  
+  # Return an instance of the default, not-yet-instantiated object. If
+  # `@wrapper` was called, then it's an instance of this clas with `undefined`
+  # as its value. Otherwise, an unwrapped `undefined` is returned.
+  blank: ->
+    if @wrapper_class?
+      new @wrapper_class(undefined)
+    else
       undefined
   
   # Make sure the given key is being requested in a totally legal and consistent way.
@@ -205,6 +214,7 @@ class Worker
   # If a klass is given, construct a new one; otherwise, just return
   # the raw value.
   build: (value, klass) ->
+    klass ?= @wrapper_class
     if klass? then @bless(new klass(value)) else value
   
   # Extend the given object with the context methods of a worker,
@@ -225,7 +235,8 @@ class Worker
   emit: (args..., value) ->
     @emitted = true
     key = args.join consts.arg_sep
-    @db.set key, JSON.stringify(value)
+    json = value?.toJSON?() ? value
+    @db.set key, JSON.stringify(json)
     @db.publish @resp_channel, key
 
   # If we've seen this `@for_reals` before, then blow right past it.
@@ -343,12 +354,17 @@ class Worker
   # The dispatcher said to resume, so go look for the missing values again.
   resume: ->
     @get_deps true
+  
+  # Set the default wrapper class, which is overridden by `as: `
+  wrapper: (klass) ->
+    @wrapper_class = klass
 
 
 # Extend the blessed methods with the given ones, so that
 # worker contexts can use them.
 Worker.mixin = (mixins) ->
   _.extend (Worker.mixins ?= {}), mixins
+  _.extend Worker.prototype, mixins
 
 module.exports =
   
