@@ -85,8 +85,8 @@ class RedeyeTest
   
   # Send a request to the correct `requests` channel
   request: (args...) ->
-    key = args.join consts.arg_sep
-    @db.publish _('requests').namespace(@db_index), key
+    @requested = args.join consts.arg_sep
+    @db.publish _('requests').namespace(@db_index), @requested
   
   # Set a redis value, but first convert to JSON
   set: (args..., value) ->

@@ -53,6 +53,7 @@ class Doctor
     @inv = {}
     @cycles = []
     @loose_ends = []
+    @_loose_ends = {}
     @stack = []
 
   # Recursive scanning method. Simultaneously determines
@@ -67,8 +68,13 @@ class Doctor
       @scan next
     unless nexts.length
       unless @state[node] == 'done'
-        @loose_ends.push node
+        @add_loose_end node
     @stack.pop()
+  
+  add_loose_end: (node) ->
+    return if @_loose_ends[node]
+    @_loose_ends[node] = true
+    @loose_ends.push node
 
   # Convert the input form of dependencies to a more straightforward version.
   # For instance, it converts
