@@ -120,6 +120,16 @@ class WorkQueue extends events.EventEmitter
   # Alias for `Worker.mixin`
   mixin: (mixins) ->
     Worker.mixin mixins
+  
+  # Provide a callback to be executed in the context
+  # of a worker whenever it has finished running, but before
+  # saving its resutlts
+  on_finish: (callback) ->
+    Worker.finish_callback = callback
+  
+  # Provide a callback to be called every time the worker begings running
+  on_clear: (callback) ->
+    Worker.clear_callback = callback
 
 
 # The worker class is the context under which runner functions are run.
@@ -277,6 +287,7 @@ class Worker
     @emitted = false
     @search = null
     @is_async = false
+    Worker.clear_callback?.apply this
 
   # If the caught error is from a `@for_reals`, then try to resolve
   # dependencies.
@@ -304,6 +315,7 @@ class Worker
   
   # We're done!
   finish: (result) ->
+    Worker.finish_callback?.apply this
     num_workers--
     @queue.finish @key
     if result? && !@emitted
@@ -358,6 +370,10 @@ class Worker
   # Set the default wrapper class, which is overridden by `as: `
   wrapper: (klass) ->
     @wrapper_class = klass
+  
+  # Return the current worker
+  worker: ->
+    Worker.current
 
 
 # Extend the blessed methods with the given ones, so that
