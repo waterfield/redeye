@@ -46,7 +46,9 @@ class Doctor
   # aren't part of cycles.
   report_loose_ends: ->
     return unless @loose_ends.length
-    console.log "Loose ends: #{@loose_ends.join(', ')}"
+    console.log "Loose ends:"
+    for node in @loose_ends
+      console.log "  #{node}: #{@_loose_ends[node].join ','}"
 
   # Reset the doctor's diagnosis for another run.
   clear: ->
@@ -68,12 +70,12 @@ class Doctor
       @scan next
     unless nexts.length
       unless @state[node] == 'done'
-        @add_loose_end node
+        @add_loose_end node, stack[0..-1]
     @stack.pop()
   
-  add_loose_end: (node) ->
+  add_loose_end: (node, stack) ->
     return if @_loose_ends[node]
-    @_loose_ends[node] = true
+    @_loose_ends[node] = stack
     @loose_ends.push node
 
   # Convert the input form of dependencies to a more straightforward version.
