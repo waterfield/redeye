@@ -70,7 +70,7 @@ class Doctor
       @scan next
     unless nexts.length
       unless @state[node] == 'done'
-        @add_loose_end node, stack[0..-1]
+        @add_loose_end node, @stack[0..-1]
     @stack.pop()
   
   add_loose_end: (node, stack) ->
