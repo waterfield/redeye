@@ -132,7 +132,7 @@ class Dispatcher
       @doc.report() if @verbose
       @stuck_callback?(@doc, @db)
     else
-      console.log "Hmm, the doctor couldn't find anything amiss..."
+      console.log "Hmm, the doctor couldn't find anything amiss..." if @verbose
   
   # Signal a job to run again by sending a resume message
   reschedule: (key) ->
