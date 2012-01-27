@@ -318,8 +318,7 @@ class Worker
     Worker.finish_callback?.apply this
     num_workers--
     @queue.finish @key
-    if result? && !@emitted
-      @emit @key, result
+    @emit @key, (result ? null) unless @emitted
 
   # Compare the provided values against our current dependencies.
   # Missing dependencies are returned in an array.
