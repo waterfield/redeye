@@ -56,14 +56,25 @@ class WorkQueue extends events.EventEmitter
       @workers[key]?.resume()
     @resume.subscribe _('resume').namespace(@options.db_index)
 
-    @control.on 'message', (channel, action) => @perform action
+    @control.on 'message', (channel, msg) => @perform msg
     @control.subscribe _('control').namespace(@options.db_index)
   
   # React to a control message sent by the dispatcher
-  perform: (action) ->
+  perform: (msg) ->
+    action, args... = msg.split consts.key_sep
     switch action
       when 'quit' then @quit()
       when 'reset' then @reset()
+      when 'cycle' then @cycle_detected args...
+  
+  # The dispatcher is telling us the given key is part of a cycle. If it's one
+  # of ours, cause the worker to re-run, but throwing an error from the @get that
+  # caused the cycle. On the plus side, we can assume that all the worker's non-
+  # cycled dependencies have been met now.
+  cycle_detected: (key, dependencies...) ->
+    if worker = @workers[key]
+      for dep in dependencies
+        worker.cycle[dependency] = true
   
   # Run the work queue, calling the given callback on completion
   run: (@callback) ->
@@ -179,10 +190,12 @@ class Worker
     if @sticky[key]
       @sticky[key]
     else if @stage < @last_stage
-      # TODO: move the @build and @sticky[]= into @get_deps
       value = @build @cache[key], opts.as
       @sticky[key] = value if opts.sticky
       value
+    else if @cycle[key]
+      @cycle[key] = false
+      throw new CycleError
     else
       @deps.push key
       @blank()
@@ -289,6 +302,7 @@ class Worker
     @emitted = false
     @search = null
     @is_async = false
+    @cycle = {}
     Worker.clear_callback?.apply this
 
   # If the caught error is from a `@for_reals`, then try to resolve
