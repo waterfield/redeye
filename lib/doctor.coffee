@@ -45,18 +45,21 @@ class Doctor
   # Report on loose ends, that is, unsatisfied dependencies that
   # aren't part of cycles.
   report_loose_ends: ->
-    return unless @loose_ends.length
+    return unless @has_loose_ends
     console.log "Loose ends:"
-    for node in @loose_ends
-      console.log "  #{node}: #{@_loose_ends[node].join ','}"
+    for node, stack of @loose_ends
+      console.log "  #{node}: #{stack.join ','}"
+  
+  is_stuck: ->
+    @has_loose_ends || @cycles.length
 
   # Reset the doctor's diagnosis for another run.
   clear: ->
     @inv = {}
     @cycles = []
     @loose_ends = []
-    @_loose_ends = {}
     @stack = []
+    @has_loose_ends = false
 
   # Recursive scanning method. Simultaneously determines
   # cycles and graph leaves.
@@ -74,9 +77,9 @@ class Doctor
     @stack.pop()
   
   add_loose_end: (node, stack) ->
-    return if @_loose_ends[node]
-    @_loose_ends[node] = stack
-    @loose_ends.push node
+    return if @loose_ends[node]
+    @has_loose_ends = true
+    @loose_ends[node] = stack
 
   # Convert the input form of dependencies to a more straightforward version.
   # For instance, it converts

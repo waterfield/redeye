@@ -18,7 +18,7 @@ module.exports = redeye_suite
 
     # Make the idle handler just record that idling happened
     setup: ->
-      @dispatcher.when_idle => @idled = true
+      @dispatcher.on_idle => @idled = true
       @request 'a'
 
     # Assert that idling did in fact happen

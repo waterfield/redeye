@@ -22,5 +22,5 @@ module.exports = redeye_suite
     # Assert that the doctor was called when 'b' was being
     # slow, and that it detected 'b' as a loose end.
     expect: ->
-      @assert.eql @dispatcher.doc.loose_ends, ['b']
+      @assert.eql @dispatcher.doc.loose_ends, {b: ['a', 'b']}
       @finish()

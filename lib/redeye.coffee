@@ -126,10 +126,12 @@ class WorkQueue extends events.EventEmitter
   # saving its resutlts
   on_finish: (callback) ->
     Worker.finish_callback = callback
+    this
   
   # Provide a callback to be called every time the worker begings running
   on_clear: (callback) ->
     Worker.clear_callback = callback
+    this
 
 
 # The worker class is the context under which runner functions are run.

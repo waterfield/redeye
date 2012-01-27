@@ -104,7 +104,7 @@ class Dispatcher
         @reschedule key
   
   # Set the idle handler
-  when_idle: (@idle_handler) ->
+  on_idle: (@idle_handler) -> this
   
   # Clear the timeout for idling
   clear_timeout: ->
@@ -128,7 +128,11 @@ class Dispatcher
     console.log "Oops... calling the doctor!" if @verbose
     @doc ?= new Doctor @deps, @state, @_seed
     @doc.diagnose()
-    @doc.report() if @verbose
+    if @doc.is_stuck()
+      @doc.report() if @verbose
+      @stuck_callback?(@doc, @db)
+    else
+      console.log "Hmm, the doctor couldn't find anything amiss..."
   
   # Signal a job to run again by sending a resume message
   reschedule: (key) ->
@@ -171,6 +175,11 @@ class Dispatcher
     for req in @reqs
       @state[req] = 'wait'
       @db.rpush 'jobs', req
+  
+  # Provide a callback to be called when the dispatcher detects the process is stuck
+  on_stuck: (callback) ->
+    @stuck_callback = callback
+    this
         
 
 module.exports =
