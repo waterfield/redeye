@@ -1,3 +1,5 @@
+_ = require 'underscore'
+
 # The Doctor scans the dependencies and state of requests to determine
 # why no progress is being made. It looks for cyclic dependencies and
 # plain unsatisfied dependencies, and can report them.
@@ -60,7 +62,7 @@ class Doctor
     @loose_ends = []
     @stack = []
     @has_loose_ends = false
-
+  
   # Recursive scanning method. Simultaneously determines
   # cycles and graph leaves.
   scan: (node) ->
@@ -94,5 +96,16 @@ class Doctor
       for target in targets
         sources = (@inv[target] ?= [])
         sources.push source
+  
+  # Find a map of each stuck key, and the key(s) it depends on.
+  cycle_dependencies: ->
+    deps = {}
+    for cycle in @cycles
+      (deps[cycle[cycle.length-1]] ||= {})[cycle[0]] = true
+      for i in [1...cycle.length]
+        (deps[cycle[i-1]] ||= {})[cycle[i]] = true
+    for key, hash of deps
+      deps[key] = _.keys hash
+    deps
 
 module.exports = Doctor
