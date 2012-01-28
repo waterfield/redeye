@@ -165,6 +165,7 @@ class Worker
       throw 'no_runner'
     @cache = {}
     @saved_keys = {}
+    @cycle = {}
     @sequence = []
     @last_stage = 0
     num_workers++
@@ -189,13 +190,12 @@ class Worker
     #@check_stage key
     if @sticky[key]
       @sticky[key]
+    else if @cycle[key]
+      throw new CycleError
     else if @stage < @last_stage
       value = @build @cache[key], opts.as
       @sticky[key] = value if opts.sticky
       value
-    else if @cycle[key]
-      @cycle[key] = false
-      throw new CycleError
     else
       @deps.push key
       @blank()
@@ -302,7 +302,6 @@ class Worker
     @emitted = false
     @search = null
     @is_async = false
-    @cycle = {}
     Worker.clear_callback?.apply this
 
   # If the caught error is from a `@for_reals`, then try to resolve
@@ -310,8 +309,15 @@ class Worker
   caught: (err) ->
     if err == 'resolve'
       @resolve()
+    else if err.is_cycle
+      @cycle_failure()
     else
       @error err
+
+  # Let the dispatcher know that we failed to handle a cycle. Eventually the dispatcher
+  # may resolve that conflict and re-run us anyway.
+  cycle_failure: ->
+    # TODO
 
   # Mark that a fatal exception occurred
   error: (err) ->
