@@ -5,9 +5,6 @@ db = require './db'
 _ = require 'underscore'
 require './util'
 
-# Counts the number of simultaneous workers.
-num_workers = 0
-
 # The `WorkQueue` accepts job requests and starts `Worker` objects
 # to handle them.
 class WorkQueue extends events.EventEmitter
@@ -36,7 +33,7 @@ class WorkQueue extends events.EventEmitter
   
   # React to a control message sent by the dispatcher
   perform: (msg) ->
-    action, args... = msg.split consts.key_sep
+    [action, args...] = msg.split consts.key_sep
     switch action
       when 'quit' then @quit()
       when 'reset' then @reset()

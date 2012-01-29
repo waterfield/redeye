@@ -3,6 +3,9 @@ db = require './db'
 _ = require 'underscore'
 require './util'
 
+# Counts the number of simultaneous workers.
+num_workers = 0
+
 # The worker class is the context under which runner functions are run.
 # 
 # FIXME: @keys and @get_now don't work with @async !!
