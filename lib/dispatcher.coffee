@@ -19,7 +19,6 @@ class Dispatcher
     @db = db @options.db_index
     @req = db @options.db_index
     @res = db @options.db_index
-    @resume_channel = _('resume').namespace @options.db_index
     @control_channel = _('control').namespace @options.db_index
     @count = {}
     @state = {}
@@ -138,7 +137,7 @@ class Dispatcher
   reschedule: (key) ->
     delete @count[key]
     return @unseed() if key == '!seed'
-    @db.publish @resume_channel, key
+    @db.publish @control_channel, "resume#{consts.key_sep}#{key}"
   
   # Handle a request we've never seen before from a given source
   # job that depends on the given keys.

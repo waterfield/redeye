@@ -12,7 +12,6 @@ class WorkQueue extends events.EventEmitter
   # Register the 'next' event, and listen for 'resume' messages.
   constructor: (@options) ->
     @db = db @options.db_index
-    @resume = db @options.db_index
     @control = db @options.db_index
     @worker_db = db @options.db_index
     @workers = {}
@@ -24,10 +23,6 @@ class WorkQueue extends events.EventEmitter
   
   # Subscribe to channels
   listen: ->
-    @resume.on 'message', (channel, key) =>
-      @workers[key]?.resume()
-    @resume.subscribe _('resume').namespace(@options.db_index)
-
     @control.on 'message', (channel, msg) => @perform msg
     @control.subscribe _('control').namespace(@options.db_index)
   
@@ -35,9 +30,14 @@ class WorkQueue extends events.EventEmitter
   perform: (msg) ->
     [action, args...] = msg.split consts.key_sep
     switch action
+      when 'resume' then @resume args...
       when 'quit' then @quit()
       when 'reset' then @reset()
       when 'cycle' then @cycle_detected args...
+  
+  # Resume the given worker (if it's one of ours)
+  resume: (key) ->
+    @workers[key]?.resume()
   
   # The dispatcher is telling us the given key is part of a cycle. If it's one
   # of ours, cause the worker to re-run, but throwing an error from the @get that
@@ -76,7 +76,6 @@ class WorkQueue extends events.EventEmitter
   # Shut down the redis connection and stop running workers
   quit: ->
     @db.end()
-    @resume.end()
     @control.end()
     @worker_db.end()
     @callback?()
