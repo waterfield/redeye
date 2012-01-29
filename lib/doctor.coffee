@@ -68,6 +68,7 @@ class Doctor
   scan: (node) ->
     idx = @stack.indexOf node
     if idx >= 0
+      console.log 'cycle:', @stack, node # XXX
       @cycles.push @stack[idx..-1]
       return
     @stack.push node

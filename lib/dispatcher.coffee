@@ -87,6 +87,7 @@ class Dispatcher
   
   # The seed request was completed. In test mode, quit the workers.
   unseed: ->
+    console.log 'unseeding!' # XXX
     @clear_timeout()
     @quit() if @test_mode
   

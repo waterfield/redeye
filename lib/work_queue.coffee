@@ -46,7 +46,8 @@ class WorkQueue extends events.EventEmitter
   cycle_detected: (key, dependencies...) ->
     if worker = @workers[key]
       worker.cycle_detected dep for dep in dependencies
-      worker.run()
+      worker.cycle_deps = worker.deps[0..-1]
+      worker.resume()
   
   # Run the work queue, calling the given callback on completion
   run: (@callback) ->

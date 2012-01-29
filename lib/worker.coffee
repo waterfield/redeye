@@ -222,6 +222,7 @@ class Worker
     for dep, i in @deps
       @cache[dep] = JSON.parse arr[i]
       bad.push dep unless @cache[dep]?
+      delete @cycle[dep] if @failed_cyce && (!@tested_raise[dep] || @failed_raise[dep])
     bad
 
   # The first step in resolving dependencies from a `@for_reals` is
@@ -243,6 +244,7 @@ class Worker
     throw "No dependencies to get: #{@key}" unless @deps.length
     @db.mget @deps, (err, arr) =>
       return @error err if err
+      console.log @key, 'got deps', @deps, 'values', arr # XXX
       bad = @check_values arr
       if bad.length && !force
         @request_missing bad
@@ -261,12 +263,12 @@ class Worker
   # we're resuming from a cycle failure, go grab the key.
   resume: ->
     if @failed_cycle
-      @unblock()
-    else
-      @get_deps true
+      @deps = @cycle_deps
+    @get_deps true
   
   # Get the blocker key and continue
   unblock: ->
+    console.log @key, 'unblocking itself...'
     @failed_cycle = false
     keys = _.keys @cycle
     @db.mget keys, (err, arr) =>
@@ -275,9 +277,9 @@ class Worker
         if !@tested_raise[key] || @failed_raise[key]
           @cache[key] = JSON.parse(arr[index])
           delete @cycle[key]
-          console.log @key, 'unblocking', key, 'with value', arr[index]
+          console.log @key, 'unblocking', key, 'with value', arr[index] # XXX
         else
-          console.log @key, 'not unblocking', key, 'because we can handle it w/ a catch'
+          console.log @key, 'not unblocking', key, 'because we can handle it w/ a catch' # XXX
       @run()
   
   # The given key is part of a cycle and we depend on it. Mark it as being cyclical,
