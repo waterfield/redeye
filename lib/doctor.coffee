@@ -66,8 +66,9 @@ class Doctor
   # Recursive scanning method. Simultaneously determines
   # cycles and graph leaves.
   scan: (node) ->
-    if node in @stack
-      @cycles.push @stack[0..-1]
+    idx = @stack.indexOf node
+    if idx >= 0
+      @cycles.push @stack[idx..-1]
       return
     @stack.push node
     nexts = @inv[node] ? []

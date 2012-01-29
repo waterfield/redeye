@@ -7,6 +7,7 @@ module.exports = redeye_suite
   
     workers:
       # 'a' depends on 'b', and 'b' on 'c'
+      z: -> @get 'a'
       a: -> @get 'b'
       b: -> @get 'c'
       
@@ -16,11 +17,12 @@ module.exports = redeye_suite
       # handler (the Doctor) has been called.
       c: -> 
         @get 'a'
+        @emit 'q', 666
         setTimeout (=> @emit 'c', 216), 1000
 
     # Make a request that can't be fulfilled in time
     setup: ->
-      @request 'a'
+      @request 'z'
 
     # Assert that the doctor ran, and that it detected
     # our cyclic dependency.

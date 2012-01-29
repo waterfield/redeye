@@ -28,6 +28,8 @@ class Worker
     @cache = {}
     @saved_keys = {}
     @cycle = {}
+    @tested_raise = {}
+    @failed_raise = {}
     @sequence = []
     @last_stage = 0
     num_workers++
@@ -52,7 +54,8 @@ class Worker
     #@check_stage key
     if @sticky[key]
       @sticky[key]
-    else if @cycle[key]
+    else if @should_raise_cycle(key)
+      @tested_raise[key] = true
       throw new CycleError key
     else if @stage < @last_stage
       value = @build @cache[key], opts.as
@@ -61,6 +64,12 @@ class Worker
     else
       @deps.push key
       @blank()
+  
+  # We should throw a CycleError for the given key if and only if this key
+  #   A) caused a cycle at one point, and
+  #   B) has NOT successfully handled this raise before
+  should_raise_cycle: (key) ->
+    @cycle[key] && (!@tested_raise[key] || !@failed_raise[key])
   
   # Return an instance of the default, not-yet-instantiated object. If
   # `@wrapper` was called, then it's an instance of this clas with `undefined`
@@ -123,6 +132,7 @@ class Worker
     @emitted = true
     key = args.join consts.arg_sep
     json = value?.toJSON?() ? value
+    console.log 'emit', @key, key, json # XXX
     @db.set key, JSON.stringify(json)
     @db.publish @resp_channel, key
 
@@ -179,9 +189,8 @@ class Worker
   # Let the dispatcher know that we failed to handle a cycle. Eventually the dispatcher
   # may resolve that conflict and re-run us anyway.
   cycle_failure: (key) ->
-    @blocker = key
-    msg = ['!blocked', @key, key].join consts.key_sep
-    @db.publish @req_channel, msg
+    @failed_cycle = true
+    @failed_raise[key] = true
     
   # Mark that a fatal exception occurred
   error: (err) ->
@@ -251,18 +260,21 @@ class Worker
   # The dispatcher said to resume, so go look for the missing values again. If
   # we're resuming from a cycle failure, go grab the key.
   resume: ->
-    if @blocker?
+    if @failed_cycle
       @unblock()
     else
       @get_deps true
   
   # Get the blocker key and continue
   unblock: ->
-    @cycle[@blocker] = false
-    @db.get @blocker, (err, value) =>
+    @failed_cycle = false
+    keys = _.keys @cycle
+    @db.mget keys, (err, arr) =>
       return @error err if err
-      @cache[@blocker] = JSON.parse(value)
-      @blocker = null
+      for key, index in keys
+        if !@tested_raise[key] || @failed_raise[key]
+          @cache[key] = JSON.parse(arr[index])
+          delete @cycle[key]
       @run()
   
   # The given key is part of a cycle and we depend on it. Mark it as being cyclical,
@@ -272,6 +284,7 @@ class Worker
   # case, it will be removed from `@cycle` by `@unblock()`
   cycle_detected: (key) ->
     @cycle[key] = true
+    @tested_raise[key] = false
   
   # Set the default wrapper class, which is overridden by `as: `
   wrapper: (klass) ->

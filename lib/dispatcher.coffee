@@ -23,7 +23,7 @@ class Dispatcher
     @count = {}
     @state = {}
     @deps = {}
-    @blockers = {}
+    @cycle_keys = {}
     @unmet = 0
 
   # Subscribe to the `requests` and `responses` channels.
@@ -41,38 +41,16 @@ class Dispatcher
     [source, keys...] = str.split consts.key_sep
     if keys.length
       @audit "?#{str}"
-      if source == '!blocked'
-        @record_blocker keys...
-      else
-        @new_request source, keys
+      @new_request source, keys
     else if source == '!reset'
       @reset()
     else
       @seed source
   
-  # Record that the given key is waiting on the blocker to resolve its
-  # circular dependency before continuing. This indicates the given key
-  # wasn't able to satisfy the cycle on its own, and should be resumed
-  # immediately if the blocker resolves.
-  record_blocker: (key, blocker) ->
-    if @state[blocker] == 'done'
-      @reschedule key
-    else
-      (@blockers[blocker] ?= []).push key
-  
-  # The given blocker resolved, so any keys waiting on it should immediately
-  # be resumed.
-  unblock: (blocker) ->
-    @reschedule key for key in (@blockers[blocker] ? [])
-    delete @blockers[blocker]
-  
   # Determine if we're still busy recovering from a cyclic dependency. This will be
-  # true if there are currently any blockers present.
-  # XXX: there's two ways this function is a bad idea.
-  #   1) what if all keys in the cycle handle the CycleError? then there will never be blockers defined.
-  #   2) there's a brief window between detecting the cycle and the first-announced blocker.
+  # true if there are currently any unresolved cycle keys.
   recovering: ->
-    _.keys(@blockers).length > 0
+    _.keys(@cycle_keys).length > 0
   
   # Forget everything we know about dependency state.
   reset: ->
@@ -93,8 +71,8 @@ class Dispatcher
     @state[key] = 'done'
     targets = @deps[key] ? []
     delete @deps[key]
+    delete @cycle_keys[key]
     @progress targets
-    @unblock key
 
   # Write text to the audit stream
   audit: (text) ->
@@ -167,6 +145,7 @@ class Dispatcher
   recover: ->
     if !@recovering() && @doc.recoverable()
       for key, deps of @doc.cycle_dependencies()
+        @cycle_keys[key] = true
         @signal_worker_of_cycles key, deps
     else
       @fail_recovery()
@@ -184,6 +163,7 @@ class Dispatcher
   reschedule: (key) ->
     delete @count[key]
     return @unseed() if key == '!seed'
+    return if @state[key] == 'done'
     @db.publish @control_channel, "resume#{consts.key_sep}#{key}"
   
   # Handle a request we've never seen before from a given source
@@ -214,7 +194,7 @@ class Dispatcher
     (@deps[key] ?= []).push source
     @unmet++
     @count[source]++
-
+  
   # Take the unmet dependencies from the latest request and push
   # them onto the `jobs` queue.
   request_dependencies: ->
