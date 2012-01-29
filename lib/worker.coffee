@@ -180,7 +180,8 @@ class Worker
   # may resolve that conflict and re-run us anyway.
   cycle_failure: (key) ->
     @blocker = key
-    @request_missing [key]
+    msg = ['!blocked', @key, key].join consts.key_sep
+    @db.publish @req_channel, msg
     
   # Mark that a fatal exception occurred
   error: (err) ->

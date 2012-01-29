@@ -23,6 +23,7 @@ class Dispatcher
     @count = {}
     @state = {}
     @deps = {}
+    @blockers = {}
     @unmet = 0
 
   # Subscribe to the `requests` and `responses` channels.
@@ -40,11 +41,38 @@ class Dispatcher
     [source, keys...] = str.split consts.key_sep
     if keys.length
       @audit "?#{str}"
-      @new_request source, keys
+      if source == '!blocked'
+        @record_blocker keys...
+      else
+        @new_request source, keys
     else if source == '!reset'
       @reset()
     else
       @seed source
+  
+  # Record that the given key is waiting on the blocker to resolve its
+  # circular dependency before continuing. This indicates the given key
+  # wasn't able to satisfy the cycle on its own, and should be resumed
+  # immediately if the blocker resolves.
+  record_blocker: (key, blocker) ->
+    if @state[blocker] == 'done'
+      @reschedule key
+    else
+      (@blockers[blocker] ?= []).push key
+  
+  # The given blocker resolved, so any keys waiting on it should immediately
+  # be resumed.
+  unblock: (blocker) ->
+    @reschedule key for key in (@blockers[blocker] ? [])
+    delete @blockers[blocker]
+  
+  # Determine if we're still busy recovering from a cyclic dependency. This will be
+  # true if there are currently any blockers present.
+  # XXX: there's two ways this function is a bad idea.
+  #   1) what if all keys in the cycle handle the CycleError? then there will never be blockers defined.
+  #   2) there's a brief window between detecting the cycle and the first-announced blocker.
+  recovering: ->
+    _.keys(@blockers).length > 0
   
   # Forget everything we know about dependency state.
   reset: ->
@@ -66,9 +94,11 @@ class Dispatcher
     targets = @deps[key] ? []
     delete @deps[key]
     @progress targets
+    @unblock key
 
   # Write text to the audit stream
   audit: (text) ->
+    console.log text # XXX
     @audit_stream.write "#{text}\n" if @audit_stream
 
   # The given key is a 'seed' request. In test mode, completion of
@@ -129,9 +159,26 @@ class Dispatcher
     @doc.diagnose()
     if @doc.is_stuck()
       @doc.report() if @verbose
-      @stuck_callback?(@doc, @db)
+      @recover()
     else
       console.log "Hmm, the doctor couldn't find anything amiss..." if @verbose
+  
+  # Recover from a stuck process.
+  recover: ->
+    if !@recovering() && @doc.recoverable()
+      for key, deps of @doc.cycle_dependencies()
+        @signal_worker_of_cycles key, deps
+    else
+      @fail_recovery()
+  
+  # Tell the given worker that they have cycle dependencies.
+  signal_worker_of_cycles: (key, deps) ->
+    msg = ['cycle', key, deps...].join consts.key_sep
+    @db.publish @control_channel, msg
+  
+  # Recovery failed, let the callback know about it.
+  fail_recovery: ->
+    @stuck_callback?(@doc, @db)
   
   # Signal a job to run again by sending a resume message
   reschedule: (key) ->

@@ -107,5 +107,9 @@ class Doctor
     for key, hash of deps
       deps[key] = _.keys hash
     deps
+  
+  # Return whether the doctor is stuck due to cycles, and not loose ends.
+  recoverable: ->
+    !@has_loose_ends && (@cycles.length > 0)
 
 module.exports = Doctor

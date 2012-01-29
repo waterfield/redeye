@@ -10,3 +10,8 @@ _.mixin
 
   namespace: (str, ns) ->
     if ns then "#{str}_#{ns}" else str
+  
+  none: (arr) ->
+    for elem in arr
+      return false if elem
+    true
