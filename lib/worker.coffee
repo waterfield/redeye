@@ -275,6 +275,9 @@ class Worker
         if !@tested_raise[key] || @failed_raise[key]
           @cache[key] = JSON.parse(arr[index])
           delete @cycle[key]
+          console.log @key, 'unblocking', key, 'with value', arr[index]
+        else
+          console.log @key, 'not unblocking', key, 'because we can handle it w/ a catch'
       @run()
   
   # The given key is part of a cycle and we depend on it. Mark it as being cyclical,
