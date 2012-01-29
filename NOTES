@@ -1,0 +1,17 @@
+Current problem with cycle recovery is when a key can
+catch some circular errors, but not others. It has no
+way of letting the dispatcher know that it no longer
+requires the caught key in order to be rescheduled.
+
+Take this case:
+
+z -> a, b
+a -> c
+b -> c (rescues)
+c -> a, b (rescues a, but not b)
+
+There are two cycles: a,c and b,c.
+b will resolve its rescue to a value. now, even
+though c does not need a to finish in order to
+run successfully, the dispatcher will still never
+reschedule c.
