@@ -2,6 +2,7 @@ consts = require './consts'
 db = require './db'
 _ = require 'underscore'
 require './util'
+CycleError = require './cycle_error'
 
 # Counts the number of simultaneous workers.
 num_workers = 0
@@ -52,7 +53,7 @@ class Worker
     if @sticky[key]
       @sticky[key]
     else if @cycle[key]
-      throw new CycleError
+      throw new CycleError key
     else if @stage < @last_stage
       value = @build @cache[key], opts.as
       @sticky[key] = value if opts.sticky
@@ -171,15 +172,16 @@ class Worker
     if err == 'resolve'
       @resolve()
     else if err.is_cycle
-      @cycle_failure()
+      @cycle_failure err.key
     else
       @error err
 
   # Let the dispatcher know that we failed to handle a cycle. Eventually the dispatcher
   # may resolve that conflict and re-run us anyway.
-  cycle_failure: ->
-    # TODO
-
+  cycle_failure: (key) ->
+    @blocker = key
+    @request_missing [key]
+    
   # Mark that a fatal exception occurred
   error: (err) ->
     message = err.stack ? err
@@ -245,9 +247,30 @@ class Worker
     request = [@key, keys...].join consts.key_sep
     @db.publish @req_channel, request
 
-  # The dispatcher said to resume, so go look for the missing values again.
+  # The dispatcher said to resume, so go look for the missing values again. If
+  # we're resuming from a cycle failure, go grab the key.
   resume: ->
-    @get_deps true
+    if @blocker?
+      @unblock()
+    else
+      @get_deps true
+  
+  # Get the blocker key and continue
+  unblock: ->
+    @cycle[@blocker] = false
+    @db.get @blocker, (err, value) =>
+      return @error err if err
+      @cache[@blocker] = JSON.parse(value)
+      @blocker = null
+      @run()
+  
+  # The given key is part of a cycle and we depend on it. Mark it as being cyclical,
+  # so that the next request to `@get` will raise a CycleError. This error can be caught,
+  # in which case this key will remain in `@cycle`. If uncaught, and if some other
+  # worker breaks the cycle, the dispatcher may allow us to resolve this key. In that
+  # case, it will be removed from `@cycle` by `@unblock()`
+  cycle_detected: (key) ->
+    @cycle[key] = true
   
   # Set the default wrapper class, which is overridden by `as: `
   wrapper: (klass) ->
