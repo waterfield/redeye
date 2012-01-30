@@ -127,7 +127,6 @@ class Worker
     return if @emitted_key[key]
     @emitted_key[key] = true
     json = value?.toJSON?() ? value
-    console.log 'emit', @key, key, json # XXX
     @db.set key, JSON.stringify(json)
     @db.publish @resp_channel, key
 
@@ -232,7 +231,6 @@ class Worker
     throw "No dependencies to get: #{@key}" unless @deps.length
     @db.mget @deps, (err, arr) =>
       return @error err if err
-      console.log @key, 'got deps', @deps, 'values', arr # XXX
       bad = @check_values arr
       if bad.length && !force
         @request_missing bad

@@ -76,7 +76,6 @@ class Dispatcher
 
   # Write text to the audit stream
   audit: (text) ->
-    console.log text # XXX
     @audit_stream.write "#{text}\n" if @audit_stream
 
   # The given key is a 'seed' request. In test mode, completion of
@@ -87,7 +86,6 @@ class Dispatcher
   
   # The seed request was completed. In test mode, quit the workers.
   unseed: ->
-    console.log 'unseeding!' # XXX
     @clear_timeout()
     @quit() if @test_mode
   

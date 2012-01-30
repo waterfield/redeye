@@ -80,7 +80,7 @@ class WorkQueue extends events.EventEmitter
   
   # Clean out the sticky cache
   reset: ->
-    console.log 'worker resetting!' # XXX
+    console.log 'worker resetting'
     @sticky = {}
     
   # Mark the given worker as finished (release its memory)
