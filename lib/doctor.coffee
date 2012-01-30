@@ -15,6 +15,7 @@ class Doctor
     @clear()
     @invert_deps()
     @scan @seed
+    @uniqify_cycles()
 
   # Print a report about what's broken
   report: ->
@@ -51,6 +52,12 @@ class Doctor
     console.log "Loose ends:"
     for node, stack of @loose_ends
       console.log "  #{node}: #{stack.join ','}"
+  
+  # Remove versions of cycles that are duplicates
+  uniqify_cycles: ->
+    map = {}
+    map[cycle.sort().join()] ?= cycle for cycle in @cycles
+    @cycles = _.values map
   
   is_stuck: ->
     @has_loose_ends || @cycles.length

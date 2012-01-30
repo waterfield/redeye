@@ -23,7 +23,7 @@ class Dispatcher
     @count = {}
     @state = {}
     @deps = {}
-    @cycle_keys = {}
+    @cycles = {}
     @unmet = 0
 
   # Subscribe to the `requests` and `responses` channels.
@@ -47,11 +47,6 @@ class Dispatcher
     else
       @seed source
   
-  # Determine if we're still busy recovering from a cyclic dependency. This will be
-  # true if there are currently any unresolved cycle keys.
-  recovering: ->
-    _.keys(@cycle_keys).length > 0
-  
   # Forget everything we know about dependency state.
   reset: ->
     @count = {}
@@ -71,11 +66,11 @@ class Dispatcher
     @state[key] = 'done'
     targets = @deps[key] ? []
     delete @deps[key]
-    delete @cycle_keys[key]
     @progress targets
 
   # Write text to the audit stream
   audit: (text) ->
+    #console.log text
     @audit_stream.write "#{text}\n" if @audit_stream
 
   # The given key is a 'seed' request. In test mode, completion of
@@ -143,15 +138,22 @@ class Dispatcher
   # Recover from a stuck process.
   recover: ->
     if @doc.recoverable()
+      for cycle in @doc.cycles
+        return @fail_recovery() if @seen_cycle cycle
       for key, deps of @doc.cycle_dependencies()
-        return @fail_recovery() if @cycle_keys[key]
         @signal_worker_of_cycles key, deps
     else
       @fail_recovery()
   
+  # Determine if we've seen this cycle before
+  seen_cycle: (cycle) ->
+    key = cycle.sort().join()
+    return true if @cycles[key]
+    @cycles[key] = true
+    false
+  
   # Tell the given worker that they have cycle dependencies.
   signal_worker_of_cycles: (key, deps) ->
-    @cycle_keys[key] = true
     @remove_dependencies key, deps
     msg = ['cycle', key, deps...].join consts.key_sep
     @db.publish @control_channel, msg
