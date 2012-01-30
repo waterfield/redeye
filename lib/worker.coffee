@@ -28,8 +28,7 @@ class Worker
     @cache = {}
     @saved_keys = {}
     @cycle = {}
-    @tested_raise = {}
-    @failed_raise = {}
+    @emitted_key = {}
     @sequence = []
     @last_stage = 0
     num_workers++
@@ -49,14 +48,14 @@ class Worker
   # wouldn't be running again). Otherwise, just mark this dependency
   # and return `undefined`.
   get: (args...) ->
+    on_cycle = _(args).callback()
     opts = _(args).opts()
     key = args.join consts.arg_sep
     #@check_stage key
     if @sticky[key]
       @sticky[key]
-    else if @should_raise_cycle(key)
-      @tested_raise[key] = true
-      throw new CycleError key
+    else if @cycle[key] && on_cycle
+      @cache[key] ?= on_cycle()
     else if @stage < @last_stage
       value = @build @cache[key], opts.as
       @sticky[key] = value if opts.sticky
@@ -64,12 +63,6 @@ class Worker
     else
       @deps.push key
       @blank()
-  
-  # We should throw a CycleError for the given key if and only if this key
-  #   A) caused a cycle at one point, and
-  #   B) has NOT successfully handled this raise before
-  should_raise_cycle: (key) ->
-    @cycle[key] && (!@tested_raise[key] || !@failed_raise[key])
   
   # Return an instance of the default, not-yet-instantiated object. If
   # `@wrapper` was called, then it's an instance of this clas with `undefined`
@@ -131,6 +124,8 @@ class Worker
   emit: (args..., value) ->
     @emitted = true
     key = args.join consts.arg_sep
+    return if @emitted_key[key]
+    @emitted_key[key] = true
     json = value?.toJSON?() ? value
     console.log 'emit', @key, key, json # XXX
     @db.set key, JSON.stringify(json)
@@ -185,12 +180,6 @@ class Worker
       @cycle_failure err.key
     else
       @error err
-
-  # Let the dispatcher know that we failed to handle a cycle. Eventually the dispatcher
-  # may resolve that conflict and re-run us anyway.
-  cycle_failure: (key) ->
-    @failed_cycle = true
-    @failed_raise[key] = true
     
   # Mark that a fatal exception occurred
   error: (err) ->
@@ -222,7 +211,6 @@ class Worker
     for dep, i in @deps
       @cache[dep] = JSON.parse arr[i]
       bad.push dep unless @cache[dep]?
-      delete @cycle[dep] if @failed_cyce && (!@tested_raise[dep] || @failed_raise[dep])
     bad
 
   # The first step in resolving dependencies from a `@for_reals` is
@@ -262,34 +250,13 @@ class Worker
   # The dispatcher said to resume, so go look for the missing values again. If
   # we're resuming from a cycle failure, go grab the key.
   resume: ->
-    if @failed_cycle
-      @deps = @cycle_deps
     @get_deps true
   
-  # Get the blocker key and continue
-  unblock: ->
-    console.log @key, 'unblocking itself...'
-    @failed_cycle = false
-    keys = _.keys @cycle
-    @db.mget keys, (err, arr) =>
-      return @error err if err
-      for key, index in keys
-        if !@tested_raise[key] || @failed_raise[key]
-          @cache[key] = JSON.parse(arr[index])
-          delete @cycle[key]
-          console.log @key, 'unblocking', key, 'with value', arr[index] # XXX
-        else
-          console.log @key, 'not unblocking', key, 'because we can handle it w/ a catch' # XXX
-      @run()
-  
-  # The given key is part of a cycle and we depend on it. Mark it as being cyclical,
-  # so that the next request to `@get` will raise a CycleError. This error can be caught,
-  # in which case this key will remain in `@cycle`. If uncaught, and if some other
-  # worker breaks the cycle, the dispatcher may allow us to resolve this key. In that
-  # case, it will be removed from `@cycle` by `@unblock()`
-  cycle_detected: (key) ->
-    @cycle[key] = true
-    @tested_raise[key] = false
+  # The given key is part of a cycle and we depend on it. Mark it as being cyclical.
+  cycle_detected: (keys) ->
+    @cycle[key] = true for key in keys
+    @last_stage--
+    @run()
   
   # Set the default wrapper class, which is overridden by `as: `
   wrapper: (klass) ->

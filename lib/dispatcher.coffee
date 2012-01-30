@@ -144,17 +144,24 @@ class Dispatcher
   
   # Recover from a stuck process.
   recover: ->
-    if !@recovering() && @doc.recoverable()
+    if @doc.recoverable()
       for key, deps of @doc.cycle_dependencies()
-        @cycle_keys[key] = true
+        return @fail_recovery() if @cycle_keys[key]
         @signal_worker_of_cycles key, deps
     else
       @fail_recovery()
   
   # Tell the given worker that they have cycle dependencies.
   signal_worker_of_cycles: (key, deps) ->
+    @cycle_keys[key] = true
+    @remove_dependencies key, deps
     msg = ['cycle', key, deps...].join consts.key_sep
     @db.publish @control_channel, msg
+  
+  # Remove given dependencies from the key
+  remove_dependencies: (key, deps) ->
+    @count[key] -= deps.length
+    @deps[dep] = _.without @deps[dep], key for dep in deps
   
   # Recovery failed, let the callback know about it.
   fail_recovery: ->

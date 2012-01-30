@@ -17,16 +17,18 @@ module.exports = redeye_suite
       c: -> 
         @get 'a'
         @emit 'q', 666
-        setTimeout (=> @emit 'c', 216), 1000
+        setTimeout (=> @emit 'c', 216), 1500
   
     # Make a request that can't be fulfilled in time
     setup: ->
+      @dispatcher.on_stuck (doc) =>
+        @cycle ?= doc.cycles[0]
       @request 'z'
   
     # Assert that the doctor ran, and that it detected
     # our cyclic dependency.
     expect: ->
-      @assert.eql @dispatcher.doc.cycles[0], ['a', 'b', 'c']
+      @assert.eql @cycle, ['a', 'b', 'c']
       @finish()
 
   'caught cycle test':
@@ -36,10 +38,7 @@ module.exports = redeye_suite
       a: -> @get 'b'
       b: ->
         v = @get 'v'
-        c = try
-          @get 'c'
-        catch e
-          123
+        c = @get 'c', -> 123
         w = @get_now 'w'
         v + c + w
       c: -> @get 'a'
@@ -55,26 +54,38 @@ module.exports = redeye_suite
         @assert.eql arr, [153, 153, 153]
         @finish()
 
-  # 'double cycle test':
-  #   workers:
-  #     z: -> (@get('a') ? 0) + @get_now 'b'
-  #     a: -> @get 'c'
-  #     b: ->
-  #       try
-  #         @get 'c'
-  #       catch e
-  #         7
-  #     c: ->
-  #       a = try
-  #         @get 'a'
-  #       catch c
-  #         5
-  #       (a ? 0) + @get_now 'b'
-  #   
-  #   setup: ->
-  #     @request 'z'
-  #   
-  #   expect: ->
-  #     @db.mget ['z', 'a', 'b', 'c'], (err, arr) =>
-  #       @assert.eql arr, [19, 12, 7, 12]
-  #       @finish()
+  'double cycle test':
+    workers:
+      z: -> (@get('a') ? 0) + @get_now 'b'
+      a: -> @get 'c'
+      b: ->
+        @get 'c', -> 7
+      c: ->
+        a = @get 'a', -> 5
+        (a ? 0) + @get_now 'b'
+    
+    setup: ->
+      @request 'z'
+    
+    expect: ->
+      @db.mget ['z', 'a', 'b', 'c'], (err, arr) =>
+        @assert.eql arr, [19, 12, 7, 12]
+        @finish()
+
+  'other double cycle test':
+    workers:
+      z: -> (@get('a') ? 0) + @get_now 'b'
+      a: -> @get 'c'
+      b: -> @get 'c'
+      c: ->
+        a = @get('a', -> 5) ? 0
+        b = @get('b', -> 7) ? 0
+        a + b
+
+    setup: ->
+      @request 'z'
+
+    expect: ->
+      @db.mget ['z', 'a', 'b', 'c'], (err, arr) =>
+        @assert.eql arr, [24, 12, 12, 12]
+        @finish()
