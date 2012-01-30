@@ -89,3 +89,16 @@ module.exports = redeye_suite
       @db.mget ['z', 'a', 'b', 'c'], (err, arr) =>
         @assert.eql arr, [24, 12, 12, 12]
         @finish()
+  
+  'redundant recovery':
+    workers:
+      a: -> @get 'b', -> 1
+      b: -> @get 'c', -> 2
+      c: -> @get 'a', -> 3
+      z: -> (@get('a') ? 0) + (@get('b') ? 0) + (@get('c') ? 0)
+    setup: ->
+      @request 'z'
+    expect: ->
+      @get 'z', (val) =>
+        @assert.eql val, 6
+        @finish()
