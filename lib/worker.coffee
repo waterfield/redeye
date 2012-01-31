@@ -21,16 +21,16 @@ class Worker
     @db = @queue.worker_db
     @req_channel = _('requests').namespace @queue.options.db_index
     @resp_channel = _('responses').namespace @queue.options.db_index
-    unless @runner = @queue.runners[@prefix]
-      @emit @key, null
-      console.log "no runner for '#{@prefix}' (#{@key})"
-      throw 'no_runner'
     @cache = {}
     @saved_keys = {}
     @cycle = {}
     @emitted_key = {}
     @sequence = []
     @last_stage = 0
+    unless @runner = @queue.runners[@prefix]
+      @emit @key, null
+      console.log "no runner for '#{@prefix}' (#{@key})"
+      throw 'no_runner'
     num_workers++
   
   # Mark the worker as asynchronous. If a callback is provided, it's
