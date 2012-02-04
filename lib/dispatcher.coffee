@@ -1,5 +1,6 @@
 consts = require './consts'
 Doctor = require './doctor'
+ControlChannel = require './control_channel'
 db = require('./db')
 _ = require 'underscore'
 require './util'
@@ -18,12 +19,11 @@ class Dispatcher
     @_idle_timeout = options.idle_timeout ? (if @_test_mode then 500 else 10000)
     @_audit_stream = options.audit
     {db_index} = options
-    @_db = db db_index
     @_req = db db_index
     @_res = db db_index
-    @_control_channel = _('control').namespace db_index
     @_responses_channel = _('responses').namespace db_index
     @_requests_channel = _('requests').namespace db_index
+    @_control_channel = new ControlChannel db_index: db_index
     @_count = {}
     @_state = {}
     @_cycles = {}
@@ -33,18 +33,18 @@ class Dispatcher
   listen: ->
     @_req.on 'message', (ch, str) => @_requested str
     @_res.on 'message', (ch, str) => @_responded str
-    @_req.subscribe @_responses_channel
+    @_req.subscribe @_requests_channel
     @_res.subscribe @_responses_channel
 
   # Send quit signals to the work queues.
   quit: ->
     @_clear_timeout()
-    @_db.publish @_control_channel, 'quit'
+    @_control_channel.quit()
     finish = =>
-      @_db.del 'jobs'
+      @_control_channel.delete_jobs()
       @_req.end()
       @_res.end()
-      @_db.end()
+      @_control_channel.end()
     setTimeout finish, 500
 
   # Provide a callback to be called when the dispatcher detects the process is stuck
@@ -60,7 +60,7 @@ class Dispatcher
     @_count = {}
     @_state = {}
     @deps = {}
-    @_db.publish @_control_channel, 'reset'
+    @_control_channel.reset()
 
   # Print a debugging statement
   _debug: (args...) ->
@@ -164,7 +164,7 @@ class Dispatcher
   _signal_worker_of_cycles: (key, deps) ->
     @_remove_dependencies key, deps
     msg = ['cycle', key, deps...].join consts.key_sep
-    @_db.publish @_control_channel, msg
+    @_control_channel.publish msg
   
   # Remove given dependencies from the key
   _remove_dependencies: (key, deps) ->
@@ -173,14 +173,14 @@ class Dispatcher
   
   # Recovery failed, let the callback know about it.
   _fail_recovery: ->
-    @_stuck_callback?(@doc, @_db)
+    @_stuck_callback?(@doc, @_control_channel.db())
   
   # Signal a job to run again by sending a resume message
   _reschedule: (key) ->
     delete @_count[key]
     return @_unseed() if key == '!seed'
     return if @_state[key] == 'done'
-    @_db.publish @_control_channel, "resume#{consts.key_sep}#{key}"
+    @_control_channel.resume key
   
   # Handle a request we've never seen before from a given source
   # job that depends on the given keys.
@@ -216,7 +216,7 @@ class Dispatcher
   _request_dependencies: ->
     for req in @_reqs
       @_state[req] = 'wait'
-      @_db.rpush 'jobs', req
+      @_control_channel.push_job req
 
 module.exports =
 
