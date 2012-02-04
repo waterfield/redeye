@@ -11,16 +11,19 @@ require './util'
 class Dispatcher
 
   # Initializer
-  constructor: (@options) ->
+  constructor: (options) ->
     @deps = {}
-    @_db = db @options.db_index
-    @_req = db @options.db_index
-    @_res = db @options.db_index
-    @_test_mode = @options.test_mode
-    @_verbose = @options.verbose
-    @_idle_timeout = @options.idle_timeout ? (if @_test_mode then 500 else 10000)
-    @_audit_stream = @options.audit
-    @_control_channel = _('control').namespace @options.db_index
+    @_test_mode = options.test_mode
+    @_verbose = options.verbose
+    @_idle_timeout = options.idle_timeout ? (if @_test_mode then 500 else 10000)
+    @_audit_stream = options.audit
+    {db_index} = options
+    @_db = db db_index
+    @_req = db db_index
+    @_res = db db_index
+    @_control_channel = _('control').namespace db_index
+    @_responses_channel = _('responses').namespace db_index
+    @_requests_channel = _('requests').namespace db_index
     @_count = {}
     @_state = {}
     @_cycles = {}
@@ -30,8 +33,8 @@ class Dispatcher
   listen: ->
     @_req.on 'message', (ch, str) => @_requested str
     @_res.on 'message', (ch, str) => @_responded str
-    @_req.subscribe _('requests').namespace(@options.db_index)
-    @_res.subscribe _('responses').namespace(@options.db_index)
+    @_req.subscribe @_responses_channel
+    @_res.subscribe @_responses_channel
 
   # Send quit signals to the work queues.
   quit: ->
