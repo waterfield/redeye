@@ -12,209 +12,208 @@ class Dispatcher
 
   # Initializer
   constructor: (@options) ->
-    @test_mode = @options.test_mode
-    @verbose = @options.verbose
-    @idle_timeout = @options.idle_timeout ? (if @test_mode then 500 else 10000)
-    @audit_stream = @options.audit
-    @db = db @options.db_index
-    @req = db @options.db_index
-    @res = db @options.db_index
-    @control_channel = _('control').namespace @options.db_index
-    @count = {}
-    @state = {}
     @deps = {}
-    @cycles = {}
-    @unmet = 0
+    @_db = db @options.db_index
+    @_req = db @options.db_index
+    @_res = db @options.db_index
+    @_test_mode = @options.test_mode
+    @_verbose = @options.verbose
+    @_idle_timeout = @options.idle_timeout ? (if @_test_mode then 500 else 10000)
+    @_audit_stream = @options.audit
+    @_control_channel = _('control').namespace @options.db_index
+    @_count = {}
+    @_state = {}
+    @_cycles = {}
+    @_unmet = 0
 
   # Subscribe to the `requests` and `responses` channels.
   listen: ->
-    @req.on 'message', (ch, str) => @requested str
-    @res.on 'message', (ch, str) => @responded str
-    @req.subscribe _('requests').namespace(@options.db_index)
-    @res.subscribe _('responses').namespace(@options.db_index)
-  
+    @_req.on 'message', (ch, str) => @_requested str
+    @_res.on 'message', (ch, str) => @_responded str
+    @_req.subscribe _('requests').namespace(@options.db_index)
+    @_res.subscribe _('responses').namespace(@options.db_index)
+
+  # Send quit signals to the work queues.
+  quit: ->
+    @_clear_timeout()
+    @_db.publish @_control_channel, 'quit'
+    finish = =>
+      @_db.del 'jobs'
+      @_req.end()
+      @_res.end()
+      @_db.end()
+    setTimeout finish, 500
+
+  # Provide a callback to be called when the dispatcher detects the process is stuck
+  on_stuck: (callback) ->
+    @_stuck_callback = callback
+    this
+
+  # Set the idle handler
+  on_idle: (@_idle_handler) -> this
+
+  # Forget everything we know about dependency state.
+  _reset: ->
+    @_count = {}
+    @_state = {}
+    @deps = {}
+    @_db.publish @_control_channel, 'reset'
+
+  # Print a debugging statement
+  _debug: (args...) ->
+    #console.log 'dispatcher:', args...
+
+  # Write text to the audit stream
+  _audit: (text) ->
+    #console.log text
+    @_audit_stream.write "#{text}\n" if @_audit_stream
+
+  # The given key is a 'seed' request. In test mode, completion of
+  # the seed request signals termination of the workers.
+  _seed: (key) ->
+    @_seed_key = key
+    @_new_request '!seed', [key]
+
   # Called when a worker requests keys. The keys requested are
   # recorded as dependencies, and any new key requests are
   # turned into new jobs. You can request the key `!reset` in
   # order to flush the dependency graph.
-  requested: (str) ->
+  _requested: (str) ->
     [source, keys...] = str.split consts.key_sep
     if keys.length
-      @audit "?#{str}"
-      @new_request source, keys
+      @_audit "?#{str}"
+      @_new_request source, keys
     else if source == '!reset'
-      @reset()
+      @_reset()
     else
-      @seed source
-  
-  # Forget everything we know about dependency state.
-  reset: ->
-    @count = {}
-    @state = {}
-    @deps = {}
-    @db.publish @control_channel, 'reset'
-  
-  # Print a debugging statement
-  debug: (args...) ->
-    #console.log 'dispatcher:', args...
-  
+      @_seed source
+
   # Called when a key is completed. Any jobs depending on this
   # key are updated, and if they have no more dependencies, are
   # signalled to run again.
-  responded: (key) ->
-    @audit "!#{key}"
-    @state[key] = 'done'
+  _responded: (key) ->
+    @_audit "!#{key}"
+    @_state[key] = 'done'
     targets = @deps[key] ? []
     delete @deps[key]
-    @progress targets
+    @_progress targets
 
-  # Write text to the audit stream
-  audit: (text) ->
-    #console.log text
-    @audit_stream.write "#{text}\n" if @audit_stream
-
-  # The given key is a 'seed' request. In test mode, completion of
-  # the seed request signals termination of the workers.
-  seed: (key) ->
-    @_seed = key
-    @new_request '!seed', [key]
-  
   # The seed request was completed. In test mode, quit the workers.
-  unseed: ->
-    @clear_timeout()
-    @quit() if @test_mode
-  
-  # Send quit signals to the work queues.
-  quit: ->
-    @clear_timeout()
-    @db.publish @control_channel, 'quit'
-    finish = =>
-      @db.del 'jobs'
-      @req.end()
-      @res.end()
-      @db.end()
-    setTimeout finish, 500
+  _unseed: ->
+    @_clear_timeout()
+    @quit() if @_test_mode
 
   # Make progress on each of the given keys by decrementing
   # their count of remaining dependencies. When any reaches
   # zero, it is rescheduled.
-  progress: (keys) ->
+  _progress: (keys) ->
     for key in keys
-      @unmet--
-      unless --@count[key]
-        @reschedule key
-  
-  # Set the idle handler
-  on_idle: (@idle_handler) -> this
-  
+      @_unmet--
+      unless --@_count[key]
+        @_reschedule key
+
   # Clear the timeout for idling
-  clear_timeout: ->
-    clearTimeout @timeout
+  _clear_timeout: ->
+    clearTimeout @_timeout
 
   # Reset the timer that checks if the process is broken
-  reset_timeout: ->
-    @clear_timeout()
-    @timeout = setTimeout (=> @idle()), @idle_timeout
+  _reset_timeout: ->
+    @_clear_timeout()
+    @_timeout = setTimeout (=> @_idle()), @_idle_timeout
   
   # Activate a handler for idle timeouts. By default, this means
   # calling the doctor.
-  idle: ->
-    if @idle_handler
-      @idle_handler()
+  _idle: ->
+    if @_idle_handler
+      @_idle_handler()
     else
-      @call_doctor()
+      @_call_doctor()
   
   # Let the doctor figure out what's wrong here
-  call_doctor: ->
-    console.log "Oops... calling the doctor!" if @verbose
-    @doc ?= new Doctor @deps, @state, @_seed
+  _call_doctor: ->
+    console.log "Oops... calling the doctor!" if @_verbose
+    @doc ?= new Doctor @deps, @_state, @_seed_key
     @doc.diagnose()
     if @doc.is_stuck()
-      @doc.report() if @verbose
-      @recover()
+      @doc.report() if @_verbose
+      @_recover()
     else
-      console.log "Hmm, the doctor couldn't find anything amiss..." if @verbose
+      console.log "Hmm, the doctor couldn't find anything amiss..." if @_verbose
   
   # Recover from a stuck process.
-  recover: ->
+  _recover: ->
     if @doc.recoverable()
       for cycle in @doc.cycles
-        return @fail_recovery() if @seen_cycle cycle
+        return @_fail_recovery() if @_seen_cycle cycle
       for key, deps of @doc.cycle_dependencies()
-        @signal_worker_of_cycles key, deps
+        @_signal_worker_of_cycles key, deps
     else
-      @fail_recovery()
+      @_fail_recovery()
   
   # Determine if we've seen this cycle before
-  seen_cycle: (cycle) ->
+  _seen_cycle: (cycle) ->
     key = cycle.sort().join()
-    return true if @cycles[key]
-    @cycles[key] = true
+    return true if @_cycles[key]
+    @_cycles[key] = true
     false
   
   # Tell the given worker that they have cycle dependencies.
-  signal_worker_of_cycles: (key, deps) ->
-    @remove_dependencies key, deps
+  _signal_worker_of_cycles: (key, deps) ->
+    @_remove_dependencies key, deps
     msg = ['cycle', key, deps...].join consts.key_sep
-    @db.publish @control_channel, msg
+    @_db.publish @_control_channel, msg
   
   # Remove given dependencies from the key
-  remove_dependencies: (key, deps) ->
-    @count[key] -= deps.length
+  _remove_dependencies: (key, deps) ->
+    @_count[key] -= deps.length
     @deps[dep] = _.without @deps[dep], key for dep in deps
   
   # Recovery failed, let the callback know about it.
-  fail_recovery: ->
-    @stuck_callback?(@doc, @db)
+  _fail_recovery: ->
+    @_stuck_callback?(@doc, @_db)
   
   # Signal a job to run again by sending a resume message
-  reschedule: (key) ->
-    delete @count[key]
-    return @unseed() if key == '!seed'
-    return if @state[key] == 'done'
-    @db.publish @control_channel, "resume#{consts.key_sep}#{key}"
+  _reschedule: (key) ->
+    delete @_count[key]
+    return @_unseed() if key == '!seed'
+    return if @_state[key] == 'done'
+    @_db.publish @_control_channel, "resume#{consts.key_sep}#{key}"
   
   # Handle a request we've never seen before from a given source
   # job that depends on the given keys.
-  new_request: (source, keys) ->
-    @reqs = []
-    @reset_timeout()
-    @count[source] = 0
-    @handle_request source, keys
+  _new_request: (source, keys) ->
+    @_reqs = []
+    @_reset_timeout()
+    @_count[source] = 0
+    @_handle_request source, keys
 
   # Handle the requested keys by marking them as dependencies
   # and turning any unsatisfied ones into new jobs.
-  handle_request: (source, keys) ->
+  _handle_request: (source, keys) ->
     for key in _.uniq keys
-      @mark_dependency source, key
-    if @count[source]
-      @request_dependencies()
+      @_mark_dependency source, key
+    if @_count[source]
+      @_request_dependencies()
     else
-      @reschedule source
+      @_reschedule source
 
   # Mark the key as a dependency of the given source job. If
   # the key is already completed, then do nothing; if it has
   # not been previously requested, create a new job for it.
-  mark_dependency: (source, key) ->
-    switch @state[key]
+  _mark_dependency: (source, key) ->
+    switch @_state[key]
       when 'done' then return
-      when undefined then @reqs.push key
+      when undefined then @_reqs.push key
     (@deps[key] ?= []).push source
-    @unmet++
-    @count[source]++
+    @_unmet++
+    @_count[source]++
   
   # Take the unmet dependencies from the latest request and push
   # them onto the `jobs` queue.
-  request_dependencies: ->
-    for req in @reqs
-      @state[req] = 'wait'
-      @db.rpush 'jobs', req
-  
-  # Provide a callback to be called when the dispatcher detects the process is stuck
-  on_stuck: (callback) ->
-    @stuck_callback = callback
-    this
-        
+  _request_dependencies: ->
+    for req in @_reqs
+      @_state[req] = 'wait'
+      @_db.rpush 'jobs', req
 
 module.exports =
 
