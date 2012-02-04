@@ -1,9 +1,8 @@
-consts = require './consts'
 Doctor = require './doctor'
 ControlChannel = require './control_channel'
 AuditLog = require './audit_log'
 RequestChannel = require './request_channel'
-db = require('./db')
+ResponseChannel = require './response_channel'
 _ = require 'underscore'
 require './util'
 
@@ -21,10 +20,9 @@ class Dispatcher
     @_idle_timeout = options.idle_timeout ? (if @_test_mode then 500 else 10000)
     @_audit_log = new AuditLog stream: options.audit
     {db_index} = options
-    @_res = db db_index
-    @_responses_channel = _('responses').namespace db_index
     @_control_channel = new ControlChannel db_index: db_index
     @_requests_channel = new RequestChannel db_index: db_index
+    @_responses_channel = new ResponseChannel db_index: db_index
     @_count = {}
     @_state = {}
     @_cycles = {}
@@ -34,8 +32,7 @@ class Dispatcher
   listen: ->
     @_requests_channel.listen (source, keys) =>
       @_requested source, keys
-    @_res.on 'message', (ch, str) => @_responded str
-    @_res.subscribe @_responses_channel
+    @_responses_channel.listen (ch, str) => @_responded str
 
   # Send quit signals to the work queues.
   quit: ->
@@ -44,7 +41,7 @@ class Dispatcher
     finish = =>
       @_control_channel.delete_jobs()
       @_requests_channel.end()
-      @_res.end()
+      @_responses_channel.end()
       @_control_channel.end()
     setTimeout finish, 500
 
