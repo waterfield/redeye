@@ -163,8 +163,7 @@ class Dispatcher
   # Tell the given worker that they have cycle dependencies.
   _signal_worker_of_cycles: (key, deps) ->
     @_remove_dependencies key, deps
-    msg = ['cycle', key, deps...].join consts.key_sep
-    @_control_channel.publish msg
+    @_control_channel.cycle key, deps
   
   # Remove given dependencies from the key
   _remove_dependencies: (key, deps) ->
