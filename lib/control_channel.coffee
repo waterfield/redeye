@@ -11,6 +11,10 @@ module.exports = class ControlChannel
 
   publish: (msg) -> @_db.publish @_channel, msg
 
+  cycle: (key, deps) ->
+    msg = ['cycle', key, deps...].join consts.key_sep
+    @publish msg
+
   quit: -> @publish 'quit'
 
   reset: -> @publish 'reset'
