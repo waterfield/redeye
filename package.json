@@ -2,7 +2,7 @@
   "name": "redeye",
   "version": "0.0.1",
   "engines": {
-    "node": "0.5",
+    "node": "0.6",
     "npm": "1"
   },
   "author": "Nathan Matthews",
@@ -21,15 +21,10 @@
   },
   "main": "server",
   "dependencies": {
-    "coffee-script": "1.1",
+    "coffee-script": "1.2",
     "hiredis": "0.1",
-    "redis": "0.6",
-    "vows": "0.5",
+    "redis": "0.7",
     "expresso": "0.9",
-    "underscore": "1.1"
-  },
-  "scripts": {
-    "server": "node script/server.js",
-    "client": "node script/client.js"
+    "underscore": "1.3"
   }
 }
