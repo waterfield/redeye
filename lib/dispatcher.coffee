@@ -1,6 +1,8 @@
 consts = require './consts'
 Doctor = require './doctor'
 ControlChannel = require './control_channel'
+AuditLog = require './audit_log'
+RequestChannel = require './request_channel'
 db = require('./db')
 _ = require 'underscore'
 require './util'
@@ -17,13 +19,12 @@ class Dispatcher
     @_test_mode = options.test_mode
     @_verbose = options.verbose
     @_idle_timeout = options.idle_timeout ? (if @_test_mode then 500 else 10000)
-    @_audit_stream = options.audit
+    @_audit_log = new AuditLog stream: options.audit
     {db_index} = options
-    @_req = db db_index
     @_res = db db_index
     @_responses_channel = _('responses').namespace db_index
-    @_requests_channel = _('requests').namespace db_index
     @_control_channel = new ControlChannel db_index: db_index
+    @_requests_channel = new RequestChannel db_index: db_index
     @_count = {}
     @_state = {}
     @_cycles = {}
@@ -31,9 +32,9 @@ class Dispatcher
 
   # Subscribe to the `requests` and `responses` channels.
   listen: ->
-    @_req.on 'message', (ch, str) => @_requested str
+    @_requests_channel.listen (source, keys) =>
+      @_requested source, keys
     @_res.on 'message', (ch, str) => @_responded str
-    @_req.subscribe @_requests_channel
     @_res.subscribe @_responses_channel
 
   # Send quit signals to the work queues.
@@ -42,7 +43,7 @@ class Dispatcher
     @_control_channel.quit()
     finish = =>
       @_control_channel.delete_jobs()
-      @_req.end()
+      @_requests_channel.end()
       @_res.end()
       @_control_channel.end()
     setTimeout finish, 500
@@ -55,21 +56,21 @@ class Dispatcher
   # Set the idle handler
   on_idle: (@_idle_handler) -> this
 
-  # Forget everything we know about dependency state.
-  _reset: ->
-    @_count = {}
-    @_state = {}
-    @deps = {}
-    @_control_channel.reset()
-
   # Print a debugging statement
   _debug: (args...) ->
     #console.log 'dispatcher:', args...
 
-  # Write text to the audit stream
-  _audit: (text) ->
-    #console.log text
-    @_audit_stream.write "#{text}\n" if @_audit_stream
+  # Called when a worker requests keys. The keys requested are
+  # recorded as dependencies, and any new key requests are
+  # turned into new jobs. You can request the key `!reset` in
+  # order to flush the dependency graph.
+  _requested: (source, keys) ->
+    if keys?.length
+      @_new_request source, keys
+    else if source == '!reset'
+      @_reset()
+    else
+      @_seed source
 
   # The given key is a 'seed' request. In test mode, completion of
   # the seed request signals termination of the workers.
@@ -77,25 +78,27 @@ class Dispatcher
     @_seed_key = key
     @_new_request '!seed', [key]
 
-  # Called when a worker requests keys. The keys requested are
-  # recorded as dependencies, and any new key requests are
-  # turned into new jobs. You can request the key `!reset` in
-  # order to flush the dependency graph.
-  _requested: (str) ->
-    [source, keys...] = str.split consts.key_sep
-    if keys.length
-      @_audit "?#{str}"
-      @_new_request source, keys
-    else if source == '!reset'
-      @_reset()
-    else
-      @_seed source
+  # Forget everything we know about dependency state.
+  _reset: ->
+    @_count = {}
+    @_state = {}
+    @deps = {}
+    @_control_channel.reset()
+
+  # Handle a request we've never seen before from a given source
+  # job that depends on the given keys.
+  _new_request: (source, keys) ->
+    @_audit_log.request source, keys unless source == '!seed'
+    @_reqs = []
+    @_reset_timeout()
+    @_count[source] = 0
+    @_handle_request source, keys
 
   # Called when a key is completed. Any jobs depending on this
   # key are updated, and if they have no more dependencies, are
   # signalled to run again.
   _responded: (key) ->
-    @_audit "!#{key}"
+    @_audit_log.response key
     @_state[key] = 'done'
     targets = @deps[key] ? []
     delete @deps[key]
@@ -181,14 +184,6 @@ class Dispatcher
     return if @_state[key] == 'done'
     @_control_channel.resume key
   
-  # Handle a request we've never seen before from a given source
-  # job that depends on the given keys.
-  _new_request: (source, keys) ->
-    @_reqs = []
-    @_reset_timeout()
-    @_count[source] = 0
-    @_handle_request source, keys
-
   # Handle the requested keys by marking them as dependencies
   # and turning any unsatisfied ones into new jobs.
   _handle_request: (source, keys) ->
