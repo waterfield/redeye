@@ -49,9 +49,9 @@ class Dispatcher
   # Set the idle handler
   on_idle: (@_idle_handler) -> this
 
-  # Print a debugging statement
-  _debug: (args...) ->
-    #console.log 'dispatcher:', args...
+  # Clear the timeout for idling
+  _clear_timeout: ->
+    clearTimeout @_timeout
 
   # Called when a worker requests keys. The keys requested are
   # recorded as dependencies, and any new key requests are
@@ -86,6 +86,43 @@ class Dispatcher
     @_dependency_count[source] = 0
     @_handle_request source, keys
 
+  # Reset the timer that checks if the process is broken
+  _reset_timeout: ->
+    @_clear_timeout()
+    @_timeout = setTimeout (=> @_idle()), @_idle_timeout
+
+  # Handle the requested keys by marking them as dependencies
+  # and turning any unsatisfied ones into new jobs.
+  _handle_request: (source, keys) ->
+    for key in _.uniq keys
+      # Mark the key as a dependency of the given source job. If
+      # the key is already completed, then do nothing; if it has
+      # not been previously requested, create a new job for it.
+      unless @_state[key] == 'done'
+        @_request_dependency key unless @_state[key]?
+        (@deps[key] ?= []).push source
+        @_dependency_count[source]++
+    unless @_dependency_count[source]
+      @_reschedule source
+
+  # Take an unmet dependency from the latest request and push
+  # it onto the `jobs` queue.
+  _request_dependency: (req) ->
+    @_state[req] = 'wait'
+    @_control_channel.push_job req
+
+  # Signal a job to run again by sending a resume message
+  _reschedule: (key) ->
+    delete @_dependency_count[key]
+    return @_unseed() if key == '!seed'
+    return if @_state[key] == 'done'
+    @_control_channel.resume key
+
+  # The seed request was completed. In test mode, quit the workers.
+  _unseed: ->
+    @_clear_timeout()
+    @quit() if @_test_mode
+
   # Called when a key is completed. Any jobs depending on this
   # key are updated, and if they have no more dependencies, are
   # signalled to run again.
@@ -96,11 +133,6 @@ class Dispatcher
     delete @deps[key]
     @_progress targets
 
-  # The seed request was completed. In test mode, quit the workers.
-  _unseed: ->
-    @_clear_timeout()
-    @quit() if @_test_mode
-
   # Make progress on each of the given keys by decrementing
   # their count of remaining dependencies. When any reaches
   # zero, it is rescheduled.
@@ -108,15 +140,6 @@ class Dispatcher
     for key in keys
       unless --@_dependency_count[key]
         @_reschedule key
-
-  # Clear the timeout for idling
-  _clear_timeout: ->
-    clearTimeout @_timeout
-
-  # Reset the timer that checks if the process is broken
-  _reset_timeout: ->
-    @_clear_timeout()
-    @_timeout = setTimeout (=> @_idle()), @_idle_timeout
 
   # Activate a handler for idle timeouts. By default, this means
   # calling the doctor.
@@ -154,6 +177,10 @@ class Dispatcher
     @_cycles[key] = true
     false
 
+  # Recovery failed, let the callback know about it.
+  _fail_recovery: ->
+    @_stuck_callback?(@doc, @_control_channel.db())
+
   # Tell the given worker that they have cycle dependencies.
   _signal_worker_of_cycles: (key, deps) ->
     @_remove_dependencies key, deps
@@ -164,36 +191,9 @@ class Dispatcher
     @_dependency_count[key] -= deps.length
     @deps[dep] = _.without @deps[dep], key for dep in deps
 
-  # Recovery failed, let the callback know about it.
-  _fail_recovery: ->
-    @_stuck_callback?(@doc, @_control_channel.db())
-
-  # Signal a job to run again by sending a resume message
-  _reschedule: (key) ->
-    delete @_dependency_count[key]
-    return @_unseed() if key == '!seed'
-    return if @_state[key] == 'done'
-    @_control_channel.resume key
-
-  # Handle the requested keys by marking them as dependencies
-  # and turning any unsatisfied ones into new jobs.
-  _handle_request: (source, keys) ->
-    for key in _.uniq keys
-      # Mark the key as a dependency of the given source job. If
-      # the key is already completed, then do nothing; if it has
-      # not been previously requested, create a new job for it.
-      unless @_state[key] == 'done'
-        @_request_dependency key unless @_state[key]?
-        (@deps[key] ?= []).push source
-        @_dependency_count[source]++
-    unless @_dependency_count[source]
-      @_reschedule source
-
-  # Take an unmet dependency from the latest request and push
-  # it onto the `jobs` queue.
-  _request_dependency: (req) ->
-    @_state[req] = 'wait'
-    @_control_channel.push_job req
+  # Print a debugging statement
+  _debug: (args...) ->
+    #console.log 'dispatcher:', args...
 
 module.exports =
 
