@@ -29,8 +29,7 @@ class Dispatcher
 
   # Subscribe to the `requests` and `responses` channels.
   listen: ->
-    @_requests_channel.listen (source, keys) =>
-      @_requested source, keys
+    @_requests_channel.listen (source, keys) => @_requested source, keys
     @_responses_channel.listen (ch, str) => @_responded str
 
   # Send quit signals to the work queues.
@@ -45,9 +44,7 @@ class Dispatcher
     setTimeout finish, 500
 
   # Provide a callback to be called when the dispatcher detects the process is stuck
-  on_stuck: (callback) ->
-    @_stuck_callback = callback
-    this
+  on_stuck: (@_stuck_callback) -> this
 
   # Set the idle handler
   on_idle: (@_idle_handler) -> this
@@ -121,7 +118,7 @@ class Dispatcher
   _reset_timeout: ->
     @_clear_timeout()
     @_timeout = setTimeout (=> @_idle()), @_idle_timeout
-  
+
   # Activate a handler for idle timeouts. By default, this means
   # calling the doctor.
   _idle: ->
@@ -129,7 +126,7 @@ class Dispatcher
       @_idle_handler()
     else
       @_call_doctor()
-  
+
   # Let the doctor figure out what's wrong here
   _call_doctor: ->
     console.log "Oops... calling the doctor!" if @_verbose
@@ -140,7 +137,7 @@ class Dispatcher
       @_recover()
     else
       console.log "Hmm, the doctor couldn't find anything amiss..." if @_verbose
-  
+
   # Recover from a stuck process.
   _recover: ->
     if @doc.recoverable()
@@ -150,35 +147,35 @@ class Dispatcher
         @_signal_worker_of_cycles key, deps
     else
       @_fail_recovery()
-  
+
   # Determine if we've seen this cycle before
   _seen_cycle: (cycle) ->
     key = cycle.sort().join()
     return true if @_cycles[key]
     @_cycles[key] = true
     false
-  
+
   # Tell the given worker that they have cycle dependencies.
   _signal_worker_of_cycles: (key, deps) ->
     @_remove_dependencies key, deps
     @_control_channel.cycle key, deps
-  
+
   # Remove given dependencies from the key
   _remove_dependencies: (key, deps) ->
     @_dependency_count[key] -= deps.length
     @deps[dep] = _.without @deps[dep], key for dep in deps
-  
+
   # Recovery failed, let the callback know about it.
   _fail_recovery: ->
     @_stuck_callback?(@doc, @_control_channel.db())
-  
+
   # Signal a job to run again by sending a resume message
   _reschedule: (key) ->
     delete @_dependency_count[key]
     return @_unseed() if key == '!seed'
     return if @_state[key] == 'done'
     @_control_channel.resume key
-  
+
   # Handle the requested keys by marking them as dependencies
   # and turning any unsatisfied ones into new jobs.
   _handle_request: (source, keys) ->
@@ -198,7 +195,7 @@ class Dispatcher
       when undefined then @_reqs.push key
     (@deps[key] ?= []).push source
     @_dependency_count[source]++
-  
+
   # Take the unmet dependencies from the latest request and push
   # them onto the `jobs` queue.
   _request_dependencies: ->
