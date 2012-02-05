@@ -82,7 +82,6 @@ class Dispatcher
   # job that depends on the given keys.
   _new_request: (source, keys) ->
     @_audit_log.request source, keys unless source == '!seed'
-    @_reqs = []
     @_reset_timeout()
     @_dependency_count[source] = 0
     @_handle_request source, keys
@@ -180,28 +179,21 @@ class Dispatcher
   # and turning any unsatisfied ones into new jobs.
   _handle_request: (source, keys) ->
     for key in _.uniq keys
-      @_mark_dependency source, key
-    if @_dependency_count[source]
-      @_request_dependencies()
-    else
+      # Mark the key as a dependency of the given source job. If
+      # the key is already completed, then do nothing; if it has
+      # not been previously requested, create a new job for it.
+      unless @_state[key] == 'done'
+        @_request_dependency key unless @_state[key]?
+        (@deps[key] ?= []).push source
+        @_dependency_count[source]++
+    unless @_dependency_count[source]
       @_reschedule source
 
-  # Mark the key as a dependency of the given source job. If
-  # the key is already completed, then do nothing; if it has
-  # not been previously requested, create a new job for it.
-  _mark_dependency: (source, key) ->
-    switch @_state[key]
-      when 'done' then return
-      when undefined then @_reqs.push key
-    (@deps[key] ?= []).push source
-    @_dependency_count[source]++
-
-  # Take the unmet dependencies from the latest request and push
-  # them onto the `jobs` queue.
-  _request_dependencies: ->
-    for req in @_reqs
-      @_state[req] = 'wait'
-      @_control_channel.push_job req
+  # Take an unmet dependency from the latest request and push
+  # it onto the `jobs` queue.
+  _request_dependency: (req) ->
+    @_state[req] = 'wait'
+    @_control_channel.push_job req
 
 module.exports =
 
