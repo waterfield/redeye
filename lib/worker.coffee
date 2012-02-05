@@ -56,6 +56,7 @@ class Worker
     val = JSON.parse @yield()
     val = @cache[key] = @build val, opts.as
     @sticky[key] = val if opts.sticky
+    console.log @key, 'got', key, 'of', val # XXX
     val
 
   # Notify the dispatcher of our dependency (regardless of whether we're
@@ -105,6 +106,7 @@ class Worker
     @emitted = true
     key = args.join consts.arg_sep
     json = value?.toJSON?() ? value
+    console.log @key, 'emitting', key, 'of', json # XXX
     @db.set key, JSON.stringify(json)
     @db.publish @resp_channel, key
 
@@ -119,6 +121,7 @@ class Worker
     @fiber = Fiber =>
       @clear()
       @process()
+      console.log @key, 'done processing' # XXX
     @fiber.run()
 
   # Reset information about this run, including:
@@ -147,10 +150,13 @@ class Worker
   # emit the result of the function (if nothing has been emitted yet).
   process: ->
     Worker.current = this
-    @finish @runner.apply(this, @args)
+    result = @runner.apply(this, @args)
+    console.log 'result of', @key, 'is', result # XXX
+    @finish result
   
   # We're done!
   finish: (result) ->
+    console.log @key, 'finished with', result # XXX
     Worker.finish_callback?.apply this
     num_workers--
     @queue.finish @key
