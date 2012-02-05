@@ -20,9 +20,9 @@ class Dispatcher
     @_idle_timeout = options.idle_timeout ? (if @_test_mode then 500 else 10000)
     @_audit_log = new AuditLog stream: options.audit
     {db_index} = options
-    @_control_channel = new ControlChannel db_index: db_index
-    @_requests_channel = new RequestChannel db_index: db_index
-    @_responses_channel = new ResponseChannel db_index: db_index
+    @_control_channel = new ControlChannel {db_index}
+    @_requests_channel = new RequestChannel {db_index}
+    @_responses_channel = new ResponseChannel {db_index}
     @_dependency_count = {}
     @_state = {}
     @_cycles = {}
