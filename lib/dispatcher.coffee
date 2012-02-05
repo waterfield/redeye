@@ -23,7 +23,7 @@ class Dispatcher
     @_control_channel = new ControlChannel db_index: db_index
     @_requests_channel = new RequestChannel db_index: db_index
     @_responses_channel = new ResponseChannel db_index: db_index
-    @_count = {}
+    @_dependency_count = {}
     @_state = {}
     @_cycles = {}
 
@@ -76,7 +76,7 @@ class Dispatcher
 
   # Forget everything we know about dependency state.
   _reset: ->
-    @_count = {}
+    @_dependency_count = {}
     @_state = {}
     @deps = {}
     @_control_channel.reset()
@@ -87,7 +87,7 @@ class Dispatcher
     @_audit_log.request source, keys unless source == '!seed'
     @_reqs = []
     @_reset_timeout()
-    @_count[source] = 0
+    @_dependency_count[source] = 0
     @_handle_request source, keys
 
   # Called when a key is completed. Any jobs depending on this
@@ -110,7 +110,7 @@ class Dispatcher
   # zero, it is rescheduled.
   _progress: (keys) ->
     for key in keys
-      unless --@_count[key]
+      unless --@_dependency_count[key]
         @_reschedule key
 
   # Clear the timeout for idling
@@ -165,7 +165,7 @@ class Dispatcher
   
   # Remove given dependencies from the key
   _remove_dependencies: (key, deps) ->
-    @_count[key] -= deps.length
+    @_dependency_count[key] -= deps.length
     @deps[dep] = _.without @deps[dep], key for dep in deps
   
   # Recovery failed, let the callback know about it.
@@ -174,7 +174,7 @@ class Dispatcher
   
   # Signal a job to run again by sending a resume message
   _reschedule: (key) ->
-    delete @_count[key]
+    delete @_dependency_count[key]
     return @_unseed() if key == '!seed'
     return if @_state[key] == 'done'
     @_control_channel.resume key
@@ -184,7 +184,7 @@ class Dispatcher
   _handle_request: (source, keys) ->
     for key in _.uniq keys
       @_mark_dependency source, key
-    if @_count[source]
+    if @_dependency_count[source]
       @_request_dependencies()
     else
       @_reschedule source
@@ -197,7 +197,7 @@ class Dispatcher
       when 'done' then return
       when undefined then @_reqs.push key
     (@deps[key] ?= []).push source
-    @_count[source]++
+    @_dependency_count[source]++
   
   # Take the unmet dependencies from the latest request and push
   # them onto the `jobs` queue.
