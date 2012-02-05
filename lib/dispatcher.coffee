@@ -26,7 +26,6 @@ class Dispatcher
     @_count = {}
     @_state = {}
     @_cycles = {}
-    @_unmet = 0
 
   # Subscribe to the `requests` and `responses` channels.
   listen: ->
@@ -111,7 +110,6 @@ class Dispatcher
   # zero, it is rescheduled.
   _progress: (keys) ->
     for key in keys
-      @_unmet--
       unless --@_count[key]
         @_reschedule key
 
@@ -199,7 +197,6 @@ class Dispatcher
       when 'done' then return
       when undefined then @_reqs.push key
     (@deps[key] ?= []).push source
-    @_unmet++
     @_count[source]++
   
   # Take the unmet dependencies from the latest request and push
