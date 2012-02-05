@@ -2,6 +2,7 @@ consts = require './consts'
 db = require './db'
 _ = require 'underscore'
 require './util'
+require 'fibers'
 
 # Counts the number of simultaneous workers.
 num_workers = 0
@@ -21,11 +22,6 @@ class Worker
     @req_channel = _('requests').namespace @queue.options.db_index
     @resp_channel = _('responses').namespace @queue.options.db_index
     @cache = {}
-    @saved_keys = {}
-    @cycle = {}
-    @emitted_key = {}
-    @sequence = []
-    @last_stage = 0
     unless @runner = @queue.runners[@prefix]
       @emit @key, null
       console.log "no runner for '#{@prefix}' (#{@key})"
@@ -47,65 +43,42 @@ class Worker
   # wouldn't be running again). Otherwise, just mark this dependency
   # and return `undefined`.
   get: (args...) ->
-    on_cycle = _(args).callback()
     opts = _(args).opts()
     key = args.join consts.arg_sep
-    #@check_stage key
-    if @stage == @last_stage
-      @notify_dep key
-    if @sticky[key]?
-      @sticky[key]
-    else if @cycle[key] && on_cycle
-      @cache[key] ?= on_cycle()
-    else if @stage < @last_stage
-      value = @build @cache[key], opts.as
-      @sticky[key] = value if opts.sticky
-      value
-    else
-      @deps.push key
-      @blank()
-  
+    @notify_dep key
+    if saved = @sticky[key] ? @cache[key]
+      return saved
+    @db.get key, (err, val) =>
+      if val
+        @fiber.run val
+      else
+        @request_key key
+    val = JSON.parse @yield()
+    val = @cache[key] = @build val, opts.as
+    @sticky[key] = val if opts.sticky
+    val
+
   # Notify the dispatcher of our dependency (regardless of whether we're
   # going to request that key).
   notify_dep: (key) ->
     msg = ['!dep', @key, key].join consts.key_sep
     @db.publish @req_channel, msg
   
-  # Return an instance of the default, not-yet-instantiated object. If
-  # `@wrapper` was called, then it's an instance of this clas with `undefined`
-  # as its value. Otherwise, an unwrapped `undefined` is returned.
-  blank: ->
-    if @wrapper_class?
-      new @wrapper_class(undefined)
-    else
-      undefined
-  
-  # Make sure the given key is being requested in a totally legal and consistent way.
-  check_stage: (key) ->
-    if @key_index == @sequence.length
-      @sequence.push key
-    else
-      if @sequence[@key_index] != key
-        throw "#{@key} has a nondeterministic key sequence; expected #{@sequence[@key_index]}, but got #{key} (sequence: #{JSON.stringify(@sequence)})"
-    @key_index++
-  
   # Search for the given keys in the database, then remember them.
   keys: (str) ->
-    if @saved_keys[str]
-      @saved_keys[str]
-    else
-      @search = str
-      throw 'resolve'
+    @db.keys str, (err, arr) =>
+      @fiber.run arr
+    @yield()
+  
+  yield: ->
+    _.tap yield(), => Worker.current =this
   
   # This is a bit of syntactic sugar. It's the equivalent of:
   # 
   #     x = @get key
   #     @for_reals()
   #     x
-  get_now: ->
-    value = @get.apply this, arguments
-    @for_reals()
-    value
+  get_now: -> @get.apply this, arguments
 
   # If a klass is given, construct a new one; otherwise, just return
   # the raw value.
@@ -131,8 +104,6 @@ class Worker
   emit: (args..., value) ->
     @emitted = true
     key = args.join consts.arg_sep
-    return if @emitted_key[key]
-    @emitted_key[key] = true
     json = value?.toJSON?() ? value
     @db.set key, JSON.stringify(json)
     @db.publish @resp_channel, key
@@ -140,26 +111,15 @@ class Worker
   # If we've seen this `@for_reals` before, then blow right past it.
   # Otherwise, abort the runner function and start over (after checking
   # that our dependencies are met).
-  for_reals: ->
-    if @stage == @last_stage
-      if @deps.length
-        if @is_async
-          @resolve()
-          return false          
-        else
-          throw 'resolve'
-      @last_stage++
-    @stage++
-    true
+  for_reals: -> true
 
   # Attempt to run the runner function. If a call to `@for_reals` causes
   # us to abort, then attempt to resolve the dependencies.
   run: ->
-    try
+    @fiber = Fiber =>
       @clear()
       @process()
-    catch err
-      @caught err
+    @fiber.run()
 
   # Reset information about this run, including:
   # 
@@ -167,25 +127,13 @@ class Worker
   # * `@deps`: a list of new dependencies
   # * `@emitted`: whether `@emit` has been called.
   # * `@search`: the key search currently requested
-  # * `@is_async`: whether the worker is in async mode
   clear: ->
     @stage = 0
     @key_index = 0
     @deps = []
     @emitted = false
     @search = null
-    @is_async = false
     Worker.clear_callback?.apply this
-
-  # If the caught error is from a `@for_reals`, then try to resolve
-  # dependencies.
-  caught: (err) ->
-    if err == 'resolve'
-      @resolve()
-    else if err.is_cycle
-      @cycle_failure err.key
-    else
-      @error err
     
   # Mark that a fatal exception occurred
   error: (err) ->
@@ -199,9 +147,7 @@ class Worker
   # emit the result of the function (if nothing has been emitted yet).
   process: ->
     Worker.current = this
-    result = @runner.apply this, @args
-    return @resolve() if @deps.length
-    @finish result unless @is_async
+    @finish @runner.apply(this, @args)
   
   # We're done!
   finish: (result) ->
@@ -210,6 +156,7 @@ class Worker
     @queue.finish @key
     @emit @key, (result ? null) unless @emitted
 
+<<<<<<< HEAD
   # Compare the provided values against our current dependencies.
   # Missing dependencies are returned in an array.
   check_values: (arr) ->
@@ -247,24 +194,21 @@ class Worker
       else
         @run()
 
+=======
+>>>>>>> Testing fibers
   # Ask the dispatcher to providethe given keys by publishing on the
   # `requests` channel. Then block-wait to be signalled by a response
   # on a resume key. Once we get that response, try again to fetch the
   # dependencies (which should all be present).
-  request_missing: (keys) ->
-    request = [@key, keys...].join consts.key_sep
-    @db.publish @req_channel, request
+  request_key: (key) ->
+    @requested = key
+    @db.publish @req_channel, "#{@key}#{consts.key_sep}#{key}"
 
   # The dispatcher said to resume, so go look for the missing values again. If
   # we're resuming from a cycle failure, go grab the key.
   resume: ->
-    @get_deps true
-  
-  # The given key is part of a cycle and we depend on it. Mark it as being cyclical.
-  cycle_detected: (keys) ->
-    @cycle[key] = true for key in keys
-    @last_stage--
-    @run()
+    @db.get @requested, (err, val) =>
+      @fiber.run val
   
   # Set the default wrapper class, which is overridden by `as: `
   wrapper: (klass) ->

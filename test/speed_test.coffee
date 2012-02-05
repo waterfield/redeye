@@ -11,7 +11,7 @@ module.exports = redeye_suite
     workers:
       # 'n' just counts down
       n: (i) ->
-        #console.log i
+        console.log i
         i = parseInt i
         if i == 1 then 1 else @get_now('n', i-1) + 1
 
