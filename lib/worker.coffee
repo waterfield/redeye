@@ -2,7 +2,6 @@ consts = require './consts'
 db = require './db'
 _ = require 'underscore'
 require './util'
-CycleError = require './cycle_error'
 
 # Counts the number of simultaneous workers.
 num_workers = 0
