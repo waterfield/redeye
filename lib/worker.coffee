@@ -8,8 +8,6 @@ require 'fibers'
 num_workers = 0
 
 # The worker class is the context under which runner functions are run.
-# 
-# FIXME: @keys and @get_now don't work with @async !!
 class Worker
 
   # Find the runner for the `@key`. The key is in the format:
@@ -28,22 +26,13 @@ class Worker
       throw 'no_runner'
     num_workers++
   
-  # Mark the worker as asynchronous. If a callback is provided, it's
-  # run in the context of the worker.
-  async: (callback) ->
-    @is_async = true
-    callback.apply this if typeof(callback) == 'function'
-  
-  # Print a debugging statement
-  debug: (args...) ->
-    #console.log 'worker:', args...
-
   # If we've already seen this `@get` before, then return the actual
   # value we've received (which we know we got because otherwise we
   # wouldn't be running again). Otherwise, just mark this dependency
   # and return `undefined`.
   get: (args...) ->
-    opts = _(args).opts()
+    @on_cycle = _.callback args
+    opts = _.opts args
     key = args.join consts.arg_sep
     @notify_dep key
     if saved = @sticky[key] ? @cache[key]
@@ -53,8 +42,13 @@ class Worker
         @fiber.run val
       else
         @request_key key
-    val = JSON.parse @yield()
-    val = @cache[key] = @build val, opts.as
+    val = @yield()
+    if @cycling
+      console.log 'we cyclin' # XXX
+      @cycling = false
+      val = @on_cycle.apply this
+    else
+      val = @cache[key] = @build JSON.parse(val), opts.as
     @sticky[key] = val if opts.sticky
     val
 
@@ -210,6 +204,12 @@ class Worker
   resume: ->
     @db.get @requested, (err, val) =>
       @fiber.run val
+  
+  cycle: ->
+    console.log @key, 'got cycle sig', @on_cycle
+    if @on_cycle
+      @cycling = true
+      @fiber.run()
   
   # Set the default wrapper class, which is overridden by `as: `
   wrapper: (klass) ->

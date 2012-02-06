@@ -2,10 +2,12 @@ consts = require './consts'
 
 module.exports = class AuditLog
   constructor: (options) ->
+    @debug = true
     @_stream = options.stream
 
   # Write text to the audit stream
   log: (text) ->
+    console.log text if @debug
     @_stream.write "#{text}\n" if @_stream
 
   request: (source, keys) ->

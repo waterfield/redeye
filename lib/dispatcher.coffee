@@ -121,6 +121,7 @@ class Dispatcher
   # Handle a request we've never seen before from a given source
   # job that depends on the given keys.
   _new_request: (source, keys) ->
+    @_remove_all_deps source # XXX
     @_audit_log.request source, keys unless source == '!seed'
     @_reset_timeout()
     @_dependency_count[source] = 0
@@ -210,8 +211,10 @@ class Dispatcher
   # Recover from a stuck process.
   _recover: ->
     if @doc.recoverable()
+      console.log 'trying to recover' # XXX
       for cycle in @doc.cycles
-        return @_fail_recovery() if @_seen_cycle cycle
+        console.log 'from', cycle # XXX
+        return @_fail_recovery(cycle) if @_seen_cycle cycle
       for key, deps of @doc.cycle_dependencies()
         @_signal_worker_of_cycles key, deps
     else
@@ -230,13 +233,19 @@ class Dispatcher
       delete @_cycles[cycle] if cycle.indexOf(key) > -1
 
   # Recovery failed, let the callback know about it.
-  _fail_recovery: ->
+  _fail_recovery: (cycle) ->
+    console.log 'oh shit', cycle # XXX
     @_stuck_callback?(@doc, @_control_channel.db())
 
   # Tell the given worker that they have cycle dependencies.
   _signal_worker_of_cycles: (key, deps) ->
-    @_remove_dependencies key, deps
+    #@_remove_dependencies key, deps
+    console.log 'sending cycle signal:', key, deps # XXX
     @_control_channel.cycle key, deps
+
+  _remove_all_deps: (key) ->
+    return unless @_dependency_count[key]?
+    @_remove_dependencies key, @deps[key]
 
   # Remove given dependencies from the key
   _remove_dependencies: (key, deps) ->

@@ -54,7 +54,8 @@ class WorkQueue extends events.EventEmitter
   # caused the cycle. On the plus side, we can assume that all the worker's non-
   # cycled dependencies have been met now.
   cycle_detected: (key, dependencies...) ->
-    @workers[key]?.cycle_detected dependencies
+    console.log 'cycle det' # XXX
+    @workers[key]?.cycle()# dependencies
   
   # Run the work queue, calling the given callback on completion
   run: (@callback) ->
