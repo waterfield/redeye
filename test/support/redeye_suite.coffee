@@ -71,7 +71,7 @@ class RedeyeTest
       @dispatcher = dispatcher.run @opts
       @queue.run => @expect.apply this
       setTimeout (=> @setup.apply this), 100
-      @timeout = setTimeout (=> @die()), 50000 # 5000
+      @timeout = setTimeout (=> @die()), 5000
 
   # Forcefully quit the test
   die: ->
