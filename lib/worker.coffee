@@ -54,6 +54,9 @@ class Worker
       else
         @request_key key
     val = JSON.parse @yield()
+    kk = val + 'asdf' # XXX
+    zz = JSON.parse(val) + 1 # XXX
+    console.log 'zz:', zz # XXX
     val = @cache[key] = @build val, opts.as
     @sticky[key] = val if opts.sticky
     console.log @key, 'got', key, 'of', val # XXX
