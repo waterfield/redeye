@@ -51,6 +51,22 @@ module.exports = redeye_suite
         @assert.equal str, '"123"'
         @assert.eql @audit.messages, ['?a|b:1', '!b:1', '?a|b:2', '!b:2', '?a|b:3', '!b:3', '!a']
         @finish()
+  
+  
+  # Test that the last @get has an implied @for_reals()
+  'implicit for_reals':
+  
+    workers:
+      a: -> @get 'b'
+      b: -> 216
+    
+    setup: ->
+      @request 'a'
+    
+    expect: ->
+      @get 'a', (val) =>
+        @assert.eql val, 216
+        @finish()
 
 
   # It wouldn't be complete without a Fibonacci test!

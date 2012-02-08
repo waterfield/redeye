@@ -76,6 +76,7 @@ class Dispatcher
     @_dependency_count = {}
     @_state = {}
     @deps = {}
+    @doc = null
     @_control_channel.reset()
 
   # Handle a request we've never seen before from a given source
