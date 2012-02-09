@@ -1,0 +1,6 @@
+#! /bin/sh
+
+CHROOT=$_/../..
+
+ls test/*_test.coffee |
+xargs -n1 node_modules/expresso/bin/expresso 
