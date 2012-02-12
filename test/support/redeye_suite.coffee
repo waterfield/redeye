@@ -77,6 +77,7 @@ class RedeyeTest
   die: ->
     @dispatcher.quit()
     @finish()
+    @assert.ok false, "Timed out, sad panda"
 
   # Terminate the last redis connection, ending the test
   finish: ->
