@@ -2,24 +2,24 @@ redeye_suite = require './support/redeye_suite'
 
 module.exports = redeye_suite 
 
-  # 'uncaught cycle test':
-  #   workers:
-  #     z: -> @get 'a'
-  #     a: -> @get 'b'
-  #     b: -> @get 'c'      
-  #     c: -> 
-  #       @get 'a'
-  #       @emit 'q', 666
-  #       setTimeout (=> @emit 'c', 216), 1500
-  #   setup: ->
-  #     @dispatcher.on_stuck (doc) =>
-  #       @cycle ?= doc.cycles[0]
-  #     @request 'z'
-  #   expect: ->
-  #     @assert.eql @cycle, ['a', 'b', 'c']
-  #     @finish()
-  # 
-  # 
+  'uncaught cycle test':
+    workers:
+      z: -> @get 'a'
+      a: -> @get 'b'
+      b: -> @get 'c'      
+      c: -> 
+        @emit 'q', 666
+        setTimeout (=> @emit 'c', 216), 1500
+        @get 'a'
+    setup: ->
+      @dispatcher.on_stuck (doc) =>
+        @cycle ?= doc.cycles[0]
+      @request 'z'
+    expect: ->
+      @assert.eql @cycle, ['a', 'b', 'c']
+      @finish()
+  
+  
   'caught cycle test':
     workers:
       z: -> @get 'a'
@@ -89,19 +89,18 @@ module.exports = redeye_suite
         @finish()
   
   
-  # 'alternate call sequence':
-  #   workers:
-  #     a: ->
-  #       @get 'b', =>
-  #         @get 'b', =>
-  #           @get 'c', =>
-  #             @get 'd'
-  #     b: -> @get 'a'
-  #     c: -> @get 'a'
-  #     d: -> 42
-  #   setup: ->
-  #     @request 'b'
-  #   expect: ->
-  #     @db.mget ['a', 'b', 'c', 'd'], (err, arr) =>
-  #       @assert.eql arr, [42, 42, 42, 42]
-  #       @finish()
+  'alternate call sequence':
+    workers:
+      a: ->
+        @get 'b', =>
+          @get 'c', =>
+            @get 'd'
+      b: -> @get 'a'
+      c: -> @get 'a'
+      d: -> 42
+    setup: ->
+      @request 'b'
+    expect: ->
+      @db.mget ['a', 'b', 'c', 'd'], (err, arr) =>
+        @assert.eql arr, [42, 42, 42, 42]
+        @finish()

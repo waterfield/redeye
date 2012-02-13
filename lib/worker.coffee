@@ -44,11 +44,11 @@ class Worker
         @request_key key
     val = @yield()
     if @cycling
-      console.log 'we cyclin' # XXX
       @cycling = false
       val = @on_cycle.apply this
     else
-      val = @cache[key] = @build JSON.parse(val), opts.as
+      val = @build JSON.parse(val), opts.as
+    @cache[key] = val
     @sticky[key] = val if opts.sticky
     val
 
@@ -206,7 +206,6 @@ class Worker
       @fiber.run val
   
   cycle: ->
-    console.log @key, 'got cycle sig', @on_cycle
     if @on_cycle
       @cycling = true
       @fiber.run()
