@@ -75,6 +75,7 @@ class Dispatcher
   _reset: ->
     @_dependency_count = {}
     @_state = {}
+    @_cycles = {}
     @deps = {}
     @doc = null
     @_control_channel.reset()
