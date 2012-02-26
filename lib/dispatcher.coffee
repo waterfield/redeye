@@ -15,6 +15,7 @@ class Dispatcher
   # Initializer
   constructor: (options) ->
     @deps = {}
+    @link = {}
     @_test_mode = options.test_mode
     @_verbose = options.verbose
     @_idle_timeout = options.idle_timeout ? (if @_test_mode then 500 else 10000)
@@ -58,10 +59,12 @@ class Dispatcher
   # turned into new jobs. You can request the key `!reset` in
   # order to flush the dependency graph.
   _requested: (source, keys) ->
-    if keys?.length
-      @_new_request source, keys
-    else if source == '!reset'
+    if source == '!reset'
       @_reset()
+    else if source == '!invalidate'
+      @_invalidate key for key in keys
+    else if keys?.length
+      @_new_request source, keys
     else
       @_seed source
 
@@ -76,9 +79,24 @@ class Dispatcher
     @_dependency_count = {}
     @_state = {}
     @_cycles = {}
+    @link = {}
     @deps = {}
     @doc = null
     @_control_channel.reset()
+  
+  # Remove the key or key-pattern from the DB and recursively invalidate its dependent keys
+  _invalidate: (pattern) ->
+    kill = (key) =>
+      @_db().del key
+      deps = @link[key] ? []
+      delete @link[key]
+      delete @_state[key]
+      kill dep for dep in deps
+    if pattern.indexOf('*') >= 0
+      @_db().keys pattern, (e, keys) ->
+        kill key for key in keys
+    else
+      kill pattern
 
   # Handle a request we've never seen before from a given source
   # job that depends on the given keys.
@@ -100,6 +118,7 @@ class Dispatcher
       # Mark the key as a dependency of the given source job. If
       # the key is already completed, then do nothing; if it has
       # not been previously requested, create a new job for it.
+      (@link[source] ?= []).push key
       unless @_state[key] == 'done'
         @_request_dependency key unless @_state[key]?
         (@deps[key] ?= []).push source
@@ -196,6 +215,10 @@ class Dispatcher
   # Print a debugging statement
   _debug: (args...) ->
     #console.log 'dispatcher:', args...
+  
+  # Grab a database hook
+  _db: ->
+    @_control_channel.db()
 
 module.exports =
 
