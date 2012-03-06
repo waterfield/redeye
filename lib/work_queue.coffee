@@ -31,6 +31,7 @@ class WorkQueue extends events.EventEmitter
     [action, args...] = msg.split consts.key_sep
     switch action
       when 'resume' then @resume args...
+      when 'erase' then @erase args...
       when 'quit' then @quit()
       when 'reset' then @reset()
       when 'cycle' then @cycle_detected args...
@@ -39,6 +40,10 @@ class WorkQueue extends events.EventEmitter
   resume: (key) ->
     @workers[key]?.resume()
   
+  # Erase the given key from the sticky cache (it was invalidated).
+  erase: (key) ->
+    delete @sticky[key]
+
   # The dispatcher is telling us the given key is part of a cycle. If it's one
   # of ours, cause the worker to re-run, but throwing an error from the @get that
   # caused the cycle. On the plus side, we can assume that all the worker's non-

@@ -63,6 +63,8 @@ class Dispatcher
       @_reset()
     else if source == '!invalidate'
       @_invalidate key for key in keys
+    else if source == '!dep'
+      @_record_dep keys...
     else if keys?.length
       @_new_request source, keys
     else
@@ -91,6 +93,7 @@ class Dispatcher
       deps = @link[key] ? []
       delete @link[key]
       delete @_state[key]
+      @_control_channel.erase key
       kill dep for dep in deps
     if pattern.indexOf('*') >= 0
       @_db().keys pattern, (e, keys) ->
@@ -110,6 +113,10 @@ class Dispatcher
   _reset_timeout: ->
     @_clear_timeout()
     @_timeout = setTimeout (=> @_idle()), @_idle_timeout
+  
+  # Add an explicit dependency to `@link`
+  _record_dep: (source, key) ->
+    (@link[key] ?= []).push source
 
   # Handle the requested keys by marking them as dependencies
   # and turning any unsatisfied ones into new jobs.
@@ -118,7 +125,6 @@ class Dispatcher
       # Mark the key as a dependency of the given source job. If
       # the key is already completed, then do nothing; if it has
       # not been previously requested, create a new job for it.
-      (@link[source] ?= []).push key
       unless @_state[key] == 'done'
         @_request_dependency key unless @_state[key]?
         (@deps[key] ?= []).push source

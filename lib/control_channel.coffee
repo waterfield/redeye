@@ -21,10 +21,12 @@ module.exports = class ControlChannel
 
   resume: (key) -> @publish "resume#{consts.key_sep}#{key}"
 
+  erase: (key) -> @publish "erase#{consts.key_sep}#{key}"
+
   delete_jobs: -> @_db.del 'jobs'
 
   end: -> @_db.end()
 
   push_job: (req) -> @_db.rpush 'jobs', req
-
+  
   db: -> @_db

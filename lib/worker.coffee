@@ -51,6 +51,8 @@ class Worker
     opts = _(args).opts()
     key = args.join consts.arg_sep
     #@check_stage key
+    if @stage < @last_stage
+      @notify_dep key
     if @sticky[key]
       @sticky[key]
     else if @cycle[key] && on_cycle
@@ -62,6 +64,12 @@ class Worker
     else
       @deps.push key
       @blank()
+  
+  # Notify the dispatcher of our dependency (regardless of whether we're
+  # going to request that key).
+  notify_dep: (key) ->
+    msg = ['!dep', @key, key].join consts.key_sep
+    @db.publish @req_channel, msg
   
   # Return an instance of the default, not-yet-instantiated object. If
   # `@wrapper` was called, then it's an instance of this clas with `undefined`
