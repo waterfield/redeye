@@ -65,6 +65,8 @@ class Dispatcher
       @_invalidate key for key in keys
     else if source == '!dep'
       @_record_dep keys...
+    else if source == '!replace'
+      @_replace keys[0], keys[1..-1].join('|')
     else if keys?.length
       @_new_request source, keys
     else
@@ -86,12 +88,18 @@ class Dispatcher
     @doc = null
     @_control_channel.reset()
   
+  # Invalidate the given key, then replace its value with the given string
+  _replace: (key, str) ->
+    @_invalidate key
+    @_db().set key, str
+  
   # Remove the key or key-pattern from the DB and recursively invalidate its dependent keys
   _invalidate: (pattern) ->
     kill = (key) =>
       @_db().del key
       deps = @link[key] ? []
       delete @link[key]
+#      delete @deps[key]
       delete @_state[key]
       @_control_channel.erase key
       kill dep for dep in deps
@@ -179,7 +187,7 @@ class Dispatcher
   # Let the doctor figure out what's wrong here
   _call_doctor: ->
     console.log "Oops... calling the doctor!" if @_verbose
-    @doc ?= new Doctor @deps, @_state, @_seed_key
+    @doc = new Doctor @deps, @_state, @_seed_key
     @doc.diagnose()
     if @doc.is_stuck()
       @doc.report() if @_verbose

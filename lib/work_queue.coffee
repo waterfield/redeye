@@ -4,6 +4,7 @@ consts = require './consts'
 db = require './db'
 _ = require 'underscore'
 require './util'
+util = require 'util'
 
 # The `WorkQueue` accepts job requests and starts `Worker` objects
 # to handle them.
@@ -35,7 +36,11 @@ class WorkQueue extends events.EventEmitter
       when 'quit' then @quit()
       when 'reset' then @reset()
       when 'cycle' then @cycle_detected args...
+      when 'info' then @dump_info()
   
+  dump_info: ->
+    console.log util.inspect(this, false, null, true)
+      
   # Resume the given worker (if it's one of ours)
   resume: (key) ->
     @workers[key]?.resume()
