@@ -27,6 +27,8 @@ class Dispatcher
     @_dependency_count = {}
     @_state = {}
     @_cycles = {}
+    @_seed_count = 0
+    @_seeds = {}
 
   # Subscribe to the `requests` and `responses` channels.
   listen: ->
@@ -75,7 +77,8 @@ class Dispatcher
   # The given key is a 'seed' request. In test mode, completion of
   # the seed request signals termination of the workers.
   _seed: (key) ->
-    @_seed_key = key
+    @_seeds[key] = true
+    @_seed_count++
     @_new_request '!seed', [key]
 
   # Forget everything we know about dependency state.
@@ -99,8 +102,8 @@ class Dispatcher
       @_db().del key
       deps = @link[key] ? []
       delete @link[key]
-#      delete @deps[key]
       delete @_state[key]
+      @_remove_cycles_containing key
       @_control_channel.erase key
       kill dep for dep in deps
     if pattern.indexOf('*') >= 0
@@ -155,8 +158,9 @@ class Dispatcher
 
   # The seed request was completed. In test mode, quit the workers.
   _unseed: ->
-    @_clear_timeout()
-    @quit() if @_test_mode
+    unless --@_seed_count
+      @_clear_timeout()
+      @quit() if @_test_mode
 
   # Called when a key is completed. Any jobs depending on this
   # key are updated, and if they have no more dependencies, are
@@ -187,7 +191,7 @@ class Dispatcher
   # Let the doctor figure out what's wrong here
   _call_doctor: ->
     console.log "Oops... calling the doctor!" if @_verbose
-    @doc = new Doctor @deps, @_state, @_seed_key
+    @doc = new Doctor @deps, @_state, _.keys(@_seeds)
     @doc.diagnose()
     if @doc.is_stuck()
       @doc.report() if @_verbose
@@ -211,6 +215,11 @@ class Dispatcher
     return true if @_cycles[key]
     @_cycles[key] = true
     false
+  
+  # Remove any cycle that includes the given key
+  _remove_cycles_containing: (key) ->
+    for cycle in _.keys @_cycles
+      delete @_cycles[cycle] if cycle.indexOf(key) > -1
 
   # Recovery failed, let the callback know about it.
   _fail_recovery: ->

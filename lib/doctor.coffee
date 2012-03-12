@@ -8,13 +8,13 @@ class Doctor
   # Create a new doctor based on the given dependencies
   # (in `{dependency: [dependent, ...]}` form), state of jobs,
   # and the seed job.
-  constructor: (@deps, @state, @seed) ->
+  constructor: (@deps, @state, @seeds) ->
 
   # Scan the information to determine what's wrong
   diagnose: ->
     @clear()
     @invert_deps()
-    @scan @seed
+    @scan seed for seed in @seeds
     @uniqify_cycles()
 
   # Print a report about what's broken
