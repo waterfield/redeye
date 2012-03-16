@@ -166,6 +166,7 @@ class Dispatcher
   # key are updated, and if they have no more dependencies, are
   # signalled to run again.
   _responded: (key) ->
+    @_reset_timeout()
     @_audit_log.response key
     @_state[key] = 'done'
     targets = @deps[key] ? []
