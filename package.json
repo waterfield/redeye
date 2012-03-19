@@ -19,7 +19,7 @@
     "bin": "./bin",
     "script": "./script"
   },
-  "main": "server",
+  "main": "package.js",
   "dependencies": {
     "coffee-script": "1.2",
     "hiredis": "0.1",
