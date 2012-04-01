@@ -65,12 +65,18 @@ class Dispatcher
       @_invalidate key for key in keys
     else if source == '!dep'
       @_record_dep keys...
+    else if source == '!dump'
+      @_dump_link()
     else if source == '!replace'
       @_replace keys[0], keys[1..-1].join('|')
     else if keys?.length
       @_new_request source, keys
     else
       @_seed source
+
+  # Store the current links in the 'deps' key
+  _dump_link: ->
+    @_db().set 'deps', JSON.stringify(@link)
 
   # The given key is a 'seed' request. In test mode, completion of
   # the seed request signals termination of the workers.
@@ -156,6 +162,7 @@ class Dispatcher
   # The seed request was completed. In test mode, quit the workers.
   _unseed: ->
     @_clear_timeout()
+    @_dump_link()
     @quit() if @_test_mode
 
   # Called when a key is completed. Any jobs depending on this
