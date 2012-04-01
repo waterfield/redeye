@@ -51,7 +51,7 @@ class Worker
     opts = _(args).opts()
     key = args.join consts.arg_sep
     #@check_stage key
-    if @stage < @last_stage
+    if @stage == @last_stage
       @notify_dep key
     if @sticky[key]
       @sticky[key]
