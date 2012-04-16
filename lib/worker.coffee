@@ -53,7 +53,7 @@ class Worker
     #@check_stage key
     if @stage == @last_stage
       @notify_dep key
-    if @sticky[key]
+    if @sticky[key]?
       @sticky[key]
     else if @cycle[key] && on_cycle
       @cache[key] ?= on_cycle()
@@ -215,7 +215,10 @@ class Worker
   check_values: (arr) ->
     bad = []
     for dep, i in @deps
-      @cache[dep] = JSON.parse arr[i]
+      try
+        @cache[dep] = JSON.parse arr[i]
+      catch e
+        throw new Error "Cannot parse JSON for #{dep}: #{arr[i]}"
       bad.push dep unless @cache[dep]?
     bad
 
