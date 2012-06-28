@@ -14,7 +14,6 @@ class Dispatcher
 
   # Initializer
   constructor: (options) ->
-    @deps = {}
     @link = {}
     @_test_mode = options.test_mode
     @_verbose = options.verbose
@@ -94,7 +93,6 @@ class Dispatcher
     @_state = {}
     @_cycles = {}
     @link = {}
-    @deps = {}
     @needs = {}
     @gives = {}
     @doc = null
@@ -198,7 +196,7 @@ class Dispatcher
   # Let the doctor figure out what's wrong here
   _call_doctor: ->
     console.log "Oops... calling the doctor!" if @_verbose
-    @doc = new Doctor @deps, @_state, _.keys(@_seeds)
+    @doc = new Doctor @gives, @_state, _.keys(@_seeds)
     @doc.diagnose()
     if @doc.is_stuck()
       @doc.report() if @_verbose
