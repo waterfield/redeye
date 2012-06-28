@@ -214,6 +214,7 @@ class Dispatcher
         return @_fail_recovery() if @_seen_cycle cycle
       for key, deps of @doc.cycle_dependencies()
         @_signal_worker_of_cycles key, deps
+      @_reset_timeout()
     else
       @_fail_recovery()
 
@@ -235,7 +236,7 @@ class Dispatcher
 
   # Tell the given worker that they have cycle dependencies.
   _signal_worker_of_cycles: (key, deps) ->
-    @_remove_dependencies key, deps
+    # @_remove_dependencies key, deps
     @_control_channel.cycle key, deps
 
   # Remove given dependencies from the key

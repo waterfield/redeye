@@ -9,7 +9,7 @@ module.exports = redeye_suite
       b: -> @get 'c'      
       c: -> 
         @emit 'q', 666
-        setTimeout (=> @emit 'c', 216), 1500
+        setTimeout (=> @emit 'c', 216), 1500 # 1500
         @get 'a'
     setup: ->
       @dispatcher.on_stuck (doc) =>
@@ -18,8 +18,7 @@ module.exports = redeye_suite
     expect: ->
       @assert.eql @cycle, ['a', 'b', 'c']
       @finish()
-  
-  
+    
   'caught cycle test':
     workers:
       z: -> @get 'a'
@@ -40,41 +39,6 @@ module.exports = redeye_suite
         @assert.eql arr, [153, 153, 153]
         @finish()
   
-  
-  'double cycle test':
-    workers:
-      z: -> (@get('a') ? 0) + @get_now 'b'
-      a: -> @get 'c'
-      b: ->
-        @get 'c', -> 7
-      c: ->
-        a = @get 'a', -> 5
-        (a ? 0) + @get_now 'b'
-    setup: ->
-      @request 'z'
-    expect: ->
-      @db.mget ['z', 'a', 'b', 'c'], (err, arr) =>
-        @assert.eql arr, [19, 12, 7, 12]
-        @finish()
-  
-  
-  'other double cycle test':
-    workers:
-      z: -> (@get('a') ? 0) + @get_now 'b'
-      a: -> @get 'c'
-      b: -> @get 'c'
-      c: ->
-        a = @get('a', -> 5) ? 0
-        b = @get('b', -> 7) ? 0
-        a + b
-    setup: ->
-      @request 'z'
-    expect: ->
-      @db.mget ['z', 'a', 'b', 'c'], (err, arr) =>
-        @assert.eql arr, [24, 12, 12, 12]
-        @finish()
-  
-  
   'redundant recovery':
     workers:
       a: -> @get 'b', -> 1
@@ -86,21 +50,4 @@ module.exports = redeye_suite
     expect: ->
       @get 'z', (val) =>
         @assert.eql val, 6
-        @finish()
-  
-  
-  'alternate call sequence':
-    workers:
-      a: ->
-        @get 'b', =>
-          @get 'c', =>
-            @get 'd'
-      b: -> @get 'a'
-      c: -> @get 'a'
-      d: -> 42
-    setup: ->
-      @request 'b'
-    expect: ->
-      @db.mget ['a', 'b', 'c', 'd'], (err, arr) =>
-        @assert.eql arr, [42, 42, 42, 42]
         @finish()

@@ -40,7 +40,7 @@ class Doctor
   # 
   # means that C cycles back around to A.
   report_cycles: ->
-    return unless @cycles.count
+    return unless @cycles.length
     console.log "Cycles:"
     for cycle in @cycles
       console.log "  #{cycle.join ' -> '}"

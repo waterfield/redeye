@@ -75,25 +75,19 @@ class Worker
         values[key] = val
       else
         needed.push key
-    console.log {needed, values}
     if needed.length
       @db.mget needed, (err, vals) =>
-        console.log {err, vals}
         for val, i in vals
           if val
             values[needed[i]] = val
           else
             missing.push needed[i]
-        console.log {missing}
         if missing.length
           @request_keys missing
         else
           @fiber.run []
-      y = @yield()
-      console.log {y}
-      for val, i in y
+      for val, i in @yield()
         values[missing[i]] = val
-    console.log values
     for key, i in keys
       val = @build JSON.parse(values[key]), opts[i].as
       @cache[key] ?= val
@@ -206,7 +200,6 @@ class Worker
   request_keys: (keys) ->
     @requested = keys
     msg = [@key, keys...].join consts.key_sep
-    console.log {msg}
     @db.publish @req_channel, msg
 
   # The dispatcher said to resume, so go look for the missing values again. If
