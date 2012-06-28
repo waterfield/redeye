@@ -31,6 +31,9 @@ class Worker
   # wouldn't be running again). Otherwise, just mark this dependency
   # and return `undefined`.
   get: (args...) ->
+    if @_all
+      @gets.push args
+      return
     @on_cycle = _.callback args
     opts = _.opts args
     key = args.join consts.arg_sep
@@ -39,18 +42,63 @@ class Worker
       return saved
     @db.get key, (err, val) =>
       if val
-        @fiber.run val
+        @fiber.run [val]
       else
-        @request_key key
-    val = @yield()
+        @request_keys [key]
+    vals = @yield()
     if @cycling
       @cycling = false
       val = @on_cycle.apply this
     else
-      val = @build JSON.parse(val), opts.as
+      val = @build JSON.parse(vals[0]), opts.as
     @cache[key] = val
     @sticky[key] = val if opts.sticky
     val
+  
+  # Get multiple keys in parallel, and return them in an array
+  all: (fun) ->
+    @_all = true
+    @gets = []
+    fun.apply this
+    @_all = false
+    @_get_all()
+  
+  # Get all requested keys
+  _get_all: ->
+    opts = _.map @gets, (args) -> _.opts args
+    keys = _.map @gets, (args) -> args.join consts.arg_sep
+    values = {}
+    needed = []
+    missing = []
+    for key in keys
+      if val = @sticky[key] ? @cache[key]
+        values[key] = val
+      else
+        needed.push key
+    console.log {needed, values}
+    if needed.length
+      @db.mget needed, (err, vals) =>
+        console.log {err, vals}
+        for val, i in vals
+          if val
+            values[needed[i]] = val
+          else
+            missing.push needed[i]
+        console.log {missing}
+        if missing.length
+          @request_keys missing
+        else
+          @fiber.run []
+      y = @yield()
+      console.log {y}
+      for val, i in y
+        values[missing[i]] = val
+    console.log values
+    for key, i in keys
+      val = @build JSON.parse(values[key]), opts[i].as
+      @cache[key] ?= val
+      @sticky[key] ?= val if opts[i].sticky
+      val
 
   # Notify the dispatcher of our dependency (regardless of whether we're
   # going to request that key).
@@ -155,15 +203,17 @@ class Worker
   # `requests` channel. Then block-wait to be signalled by a response
   # on a resume key. Once we get that response, try again to fetch the
   # dependencies (which should all be present).
-  request_key: (key) ->
-    @requested = key
-    @db.publish @req_channel, "#{@key}#{consts.key_sep}#{key}"
+  request_keys: (keys) ->
+    @requested = keys
+    msg = [@key, keys...].join consts.key_sep
+    console.log {msg}
+    @db.publish @req_channel, msg
 
   # The dispatcher said to resume, so go look for the missing values again. If
   # we're resuming from a cycle failure, go grab the key.
   resume: ->
-    @db.get @requested, (err, val) =>
-      @fiber.run val
+    @db.mget @requested, (err, vals) =>
+      @fiber.run vals
   
   cycle: ->
     if @on_cycle
