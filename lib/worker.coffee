@@ -65,7 +65,7 @@ class Worker
     @yield()
   
   yield: ->
-    _.tap yield(), => Worker.current =this
+    _.tap yield(), => Worker.current = this
   
   # This is a bit of syntactic sugar. It's the equivalent of:
   # 
@@ -117,16 +117,9 @@ class Worker
 
   # Reset information about this run, including:
   # 
-  # * `@stage`: how many calls to `@for_reals` we've seen
-  # * `@deps`: a list of new dependencies
   # * `@emitted`: whether `@emit` has been called.
-  # * `@search`: the key search currently requested
   clear: ->
-    @stage = 0
-    @key_index = 0
-    @deps = []
     @emitted = false
-    @search = null
     Worker.clear_callback?.apply this
     
   # Mark that a fatal exception occurred
@@ -151,46 +144,6 @@ class Worker
     @queue.finish @key
     @emit @key, (result ? null) unless @emitted
 
-<<<<<<< HEAD
-  # Compare the provided values against our current dependencies.
-  # Missing dependencies are returned in an array.
-  check_values: (arr) ->
-    bad = []
-    for dep, i in @deps
-      try
-        @cache[dep] = JSON.parse arr[i]
-      catch e
-        throw new Error "Cannot parse JSON for #{dep}: #{arr[i]}"
-      bad.push dep unless @cache[dep]?
-    bad
-
-  # The first step in resolving dependencies from a `@for_reals` is
-  # to record that there's one more of them to get through, then to check
-  # the dependencies.
-  resolve: ->
-    if @search
-      @db.keys @search, (e, keys) =>
-        @saved_keys[@search] = keys
-        @run()
-    else
-      @last_stage++
-      @get_deps()
-
-  # Ask redis to provide values for our dependencies. If any are missing,
-  # send a request to the dispatcher; otherwise, resume trying to run the
-  # main function.
-  get_deps: (force = false) ->
-    throw "No dependencies to get: #{@key}" unless @deps.length
-    @db.mget @deps, (err, arr) =>
-      return @error err if err
-      bad = @check_values arr
-      if bad.length && !force
-        @request_missing bad
-      else
-        @run()
-
-=======
->>>>>>> Testing fibers
   # Ask the dispatcher to providethe given keys by publishing on the
   # `requests` channel. Then block-wait to be signalled by a response
   # on a resume key. Once we get that response, try again to fetch the
