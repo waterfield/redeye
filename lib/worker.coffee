@@ -135,7 +135,14 @@ class Worker
   process: ->
     Worker.current = this
     result = @runner.apply(this, @args)
-    @finish result
+    @finish result unless @_async
+  
+  async: (fun) ->
+    fun.apply this
+    yield().apply this
+  
+  sync: (fun) ->
+    @fiber.run fun
   
   # We're done!
   finish: (result) ->
