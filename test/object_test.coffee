@@ -1,4 +1,5 @@
 redeye_suite = require './support/redeye_suite'
+Workspace = require '../lib/workspace'
 
 # This class is instantiated and `@bless`'d auto-magically by Redeye.
 class SomeObj
@@ -8,7 +9,7 @@ class SomeObj
 
 # This class' object should be recursovely blessed,
 # giving it access to the `@get_now` method.
-class OtherObj
+class OtherObj extends Workspace
   do_stuff: -> @quux()
 
 module.exports = redeye_suite
