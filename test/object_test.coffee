@@ -5,7 +5,7 @@ Workspace = require '../lib/workspace'
 class SomeObj
   constructor: (value: @value) ->
   do_stuff: -> @value * 2
-  baz: -> @bless(new OtherObj).do_stuff()
+  baz: -> (new OtherObj).do_stuff()
 
 # This class' object should be recursovely blessed,
 # giving it access to the `@get_now` method.
