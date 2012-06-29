@@ -1,3 +1,4 @@
+Workspace = require './workspace'
 Worker = require './worker'
 events = require 'events'
 consts = require './consts'
@@ -63,6 +64,9 @@ class WorkQueue extends events.EventEmitter
   # Add a worker to the context
   worker: (prefix, runner) ->
     @runners[prefix] = runner
+    shortcut = {}
+    shortcut[prefix] = (args...) -> @get prefix, args...
+    Workspace.mixin shortcut
 
   # Look for the next job using BLPOP on the "jobs" queue. This
   # will use an event emitter to call `next` again, so the stack
@@ -109,7 +113,7 @@ class WorkQueue extends events.EventEmitter
   
   # Alias for `Worker.mixin`
   mixin: (mixins) ->
-    Worker.mixin mixins
+    Workspace.mixin mixins
   
   # Provide a callback to be executed in the context
   # of a worker whenever it has finished running, but before

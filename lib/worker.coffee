@@ -125,13 +125,12 @@ class Worker
   # Extend the given object with the context methods of a worker,
   # in addition to a recursive blessing.
   bless: (object) ->
-    for method in ['get', 'emit', 'for_reals', 'get_now', 'keys', 'worker']
-      do (method) -> object[method] = ->
-        Worker.current[method].apply Worker.current, arguments
-    for method, fun of Worker.mixins
-      do (method, fun) -> object[method] = ->
-        fun.apply Worker.current, arguments
-    object.bless = (next) => @bless next
+    proto = object
+    while proto.__proto__ != Worker.Workspace.prototype
+      if proto.__proto__ == {}.__proto__
+        proto.__proto__ = Worker.Workspace.prototype
+        break
+      proto = proto.__proto__
     object
 
   # Produce `value` as a result for `key`. This both puts the result
@@ -221,11 +220,5 @@ class Worker
   worker: ->
     Worker.current
 
-
-# Extend the blessed methods with the given ones, so that
-# worker contexts can use them.
-Worker.mixin = (mixins) ->
-  _.extend (Worker.mixins ?= {}), mixins
-  _.extend Worker.prototype, mixins
 
 module.exports = Worker
