@@ -45,7 +45,8 @@ class RedeyeTest
   constructor: (test, @exit, @assert) ->
     {setup: @setup, expect: @expect, workers: @workers} = test
     @db_index = ++db_index
-    @db = db @db_index
+    @_kv = db.key_value {@db_index}
+    @_pubsub = db.pub_sub {@db_index}
     @audit = new AuditListener
     @opts = test_mode: true, db_index: @db_index, audit: @audit
     @queue = redeye.queue @opts

@@ -1,10 +1,13 @@
 consts = require './consts'
 _ = require 'underscore'
 require './util'
+db = require './db'
 
 module.exports = class ControlChannel
-  constructor: (@_pubsub, @_queue, options) ->
+  constructor: (options) ->
     {db_index} = options
+    @_pubsub = db.pub_sub options
+    @_queue = db.queue options
     @_channel = _('control').namespace db_index
 
   publish: (msg) -> @_pubsub.publish @_channel, msg

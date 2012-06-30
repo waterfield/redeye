@@ -5,6 +5,7 @@ RequestChannel = require './request_channel'
 ResponseChannel = require './response_channel'
 _ = require 'underscore'
 require './util'
+db = require './db'
 
 # The dispatcher accepts requests for keys and manages the
 # dependencies between jobs. It ensures that the same work
@@ -21,6 +22,7 @@ class Dispatcher
     @_idle_timeout = options.idle_timeout ? (if @_test_mode then 500 else 10000)
     @_audit_log = new AuditLog stream: options.audit
     {db_index} = options
+    @_kv = db.key_value options
     @_control_channel = new ControlChannel {db_index}
     @_requests_channel = new RequestChannel {db_index}
     @_responses_channel = new ResponseChannel {db_index}
@@ -40,6 +42,7 @@ class Dispatcher
     @_clear_timeout()
     @_control_channel.quit()
     finish = =>
+      @_kv.end()
       @_control_channel.delete_jobs()
       @_requests_channel.end()
       @_responses_channel.end()
@@ -78,7 +81,7 @@ class Dispatcher
 
   # Store the current links in the 'deps' key
   _dump_link: ->
-    @_db().set 'deps', JSON.stringify(@link)
+    @_kv.set 'deps', JSON.stringify(@link)
 
   # The given key is a 'seed' request. In test mode, completion of
   # the seed request signals termination of the workers.
@@ -100,12 +103,12 @@ class Dispatcher
   # Invalidate the given key, then replace its value with the given string
   _replace: (key, str) ->
     @_invalidate key
-    @_db().set key, str
+    @_kv.set key, str
   
   # Remove the key or key-pattern from the DB and recursively invalidate its dependent keys
   _invalidate: (pattern) ->
     kill = (key) =>
-      @_db().del key
+      @_kv.del key
       deps = @link[key] ? []
       delete @link[key]
       delete @_state[key]
@@ -113,7 +116,7 @@ class Dispatcher
       @_control_channel.erase key
       kill dep for dep in deps
     if pattern.indexOf('*') >= 0
-      @_db().keys pattern, (e, keys) ->
+      @_kv.keys pattern, (e, keys) ->
         kill key for key in keys
     else
       kill pattern
@@ -232,7 +235,7 @@ class Dispatcher
 
   # Recovery failed, let the callback know about it.
   _fail_recovery: ->
-    @_stuck_callback?(@doc, @_control_channel.db())
+    @_stuck_callback?(@doc, @_kv)
 
   # Tell the given worker that they have cycle dependencies.
   _signal_worker_of_cycles: (key, deps) ->
@@ -247,10 +250,7 @@ class Dispatcher
   # Print a debugging statement
   _debug: (args...) ->
     #console.log 'dispatcher:', args...
-  
-  # Grab a database hook
-  _db: ->
-    @_control_channel.db()
+
 
 module.exports =
 

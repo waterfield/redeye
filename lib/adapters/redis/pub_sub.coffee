@@ -1,4 +1,4 @@
-RedisAdapter = require './adapater'
+RedisAdapter = require './adapter'
 
 module.exports = class RedisPubSub extends RedisAdapter
   subscribe: (channel) ->

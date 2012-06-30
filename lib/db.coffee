@@ -25,4 +25,6 @@
 
 config = require './config'
 for type, adapter of config.adapters
-  exports[type] = require "./adapters/#{adapter}/#{type}"
+  do (type, adapter) ->
+    klass = require "./adapters/#{adapter}/#{type}"
+    exports[type] = (options) -> new klass(options ? {})

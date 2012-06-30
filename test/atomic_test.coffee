@@ -6,7 +6,7 @@ module.exports = redeye_suite
   
     workers:
       foo: ->
-        @worker().db.set 'baz', 123
+        @worker()._kv.set 'baz', 123
         bar = @atomic 'bar', 216 # succeeds
         baz = @atomic 'baz', 666 # fails
         [bar, baz]

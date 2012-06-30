@@ -15,7 +15,8 @@ class Worker
   #     prefix:arg1:arg2:...
   constructor: (@key, @queue, @sticky) ->
     [@prefix, @args...] = @key.split consts.arg_sep
-    @db = @queue.worker_db
+    @_pubsub = @queue._worker_pubsub
+    @_kv = @queue._worker_kv
     @req_channel = _('requests').namespace @queue.options.db_index
     @resp_channel = _('responses').namespace @queue.options.db_index
     @cache = {}

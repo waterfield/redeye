@@ -13,9 +13,11 @@ class WorkQueue extends events.EventEmitter
 
   # Register the 'next' event, and listen for 'resume' messages.
   constructor: (@options) ->
-    @db = db @options.db_index
-    @control = db @options.db_index
-    @worker_db = db @options.db_index
+    @_kv = db.key_value @options
+    @_queue = db.queue @options
+    @_pubsub = db.pub_sub @options
+    @_worker_kv = db.key_value @options
+    @_worker_pubsub = db.pub_sub @options
     @workers = {}
     @runners = {}
     @sticky = {}
@@ -25,8 +27,8 @@ class WorkQueue extends events.EventEmitter
   
   # Subscribe to channels
   listen: ->
-    @control.on 'message', (channel, msg) => @perform msg
-    @control.subscribe _('control').namespace(@options.db_index)
+    @_pubsub.message (channel, msg) => @perform msg
+    @_pubsub.subscribe _('control').namespace(@options.db_index)
   
   # React to a control message sent by the dispatcher
   perform: (msg) ->
@@ -89,8 +91,9 @@ class WorkQueue extends events.EventEmitter
   quit: ->
     @_kv.end()
     @_queue.end()
-    @control.end()
-    @worker_db.end()
+    @_pubsub.end()
+    @_worker_kv.end()
+    @_worker_pubsub.end()
     @callback?()
   
   # Clean out the sticky cache

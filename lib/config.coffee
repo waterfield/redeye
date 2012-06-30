@@ -1,2 +1,3 @@
-raw = File.readSync "#{__dirname__}/../config.json"
-module.exports = JSON.parse(raw)
+fs = require 'fs'
+raw = fs.readFileSync "#{__dirname}/../config.json"
+module.exports = JSON.parse(raw.toString())

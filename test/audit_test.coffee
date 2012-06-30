@@ -23,6 +23,6 @@ module.exports = redeye_suite
     # the audit log. Note that there are exactly two valid
     # total orderings of the dependency graph produced above.
     expect: ->
-      @_kb.get 'a', (err, str) =>
+      @_kv.get 'a', (err, str) =>
         @assert.eql @audit.messages, ['?a|b', '?b|c', '!c', '!b', '!a']
         @finish()
