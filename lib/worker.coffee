@@ -14,8 +14,7 @@ class Worker
   # 
   #     prefix:arg1:arg2:...
   constructor: (@key, @queue, @sticky) ->
-    [@prefix, args...] = @key.split consts.arg_sep
-    @args = args # weird bug in coffeescript: wanted @args... in line above
+    [@prefix, @args...] = @key.split consts.arg_sep
     @db = @queue.worker_db
     @req_channel = _('requests').namespace @queue.options.db_index
     @resp_channel = _('responses').namespace @queue.options.db_index
