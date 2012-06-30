@@ -36,7 +36,7 @@ module.exports = redeye_suite
     # `foo` should be twice it's `value` key. `quux` should be just 216, and
     # `baz` should be set to `quux`.
     expect: ->
-      @db.mget 'foo', 'bar', 'baz', 'quux', (e, [foo, bar, baz, quux]) =>
+      @_kv.get_all ['foo', 'bar', 'baz', 'quux'], (e, [foo, bar, baz, quux]) =>
         @assert.equal foo, '14'
         @assert.equal bar, '{"value":7}'
         @assert.equal baz, '216'

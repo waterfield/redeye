@@ -20,7 +20,7 @@ module.exports = redeye_suite
 
     # Assert that the sticky tests are set to the right values.
     expect: ->
-      @db.mget 'a', 'b', (err, [a,b]) =>
+      @_kv.get_all ['a', 'b'], (err, [a,b]) =>
         @assert.equal a, 216
         @assert.equal b, 42
         @finish()

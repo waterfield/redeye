@@ -24,7 +24,7 @@ module.exports = redeye_suite
     # Make sure that 'a' can be satisfied by 'b' alone, and resolves
     # to the correct value.
     expect: ->
-      @db.get 'a', (err, str) =>
+      @_kv.get 'a', (err, str) =>
         @assert.equal str, '5'
         @assert.eql @audit.messages, ['?a|b', '!c', '!b', '!a']
         @finish()

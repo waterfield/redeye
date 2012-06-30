@@ -39,7 +39,7 @@ class Worker
     @notify_dep key
     if saved = @sticky[key] ? @cache[key]
       return saved
-    @db.get key, (err, val) =>
+    @_kv.get key, (err, val) =>
       if val
         @fiber.run [val]
       else
@@ -75,7 +75,7 @@ class Worker
       else
         needed.push key
     if needed.length
-      @db.mget needed, (err, vals) =>
+      @_kv.get_all needed, (err, vals) =>
         for val, i in vals
           if val
             values[needed[i]] = val
@@ -97,11 +97,11 @@ class Worker
   # going to request that key).
   notify_dep: (key) ->
     msg = ['!dep', @key, key].join consts.key_sep
-    @db.publish @req_channel, msg
+    @_pubsub.publish @req_channel, msg
   
   # Search for the given keys in the database, then remember them.
   keys: (str) ->
-    @db.keys str, (err, arr) =>
+    @_kv.keys str, (err, arr) =>
       @fiber.run arr
     @yield()
   
@@ -132,8 +132,8 @@ class Worker
     @emitted = true
     key = args.join consts.arg_sep
     json = value?.toJSON?() ? value
-    @db.set key, JSON.stringify(json)
-    @db.publish @resp_channel, key
+    @_kv.set key, JSON.stringify(json)
+    @_pubsub.publish @resp_channel, key
 
   # Attempt to run the runner function.
   run: ->
@@ -153,7 +153,7 @@ class Worker
   error: (err) ->
     message = err.stack ? err
     console.log message
-    @db.set 'fatal', message
+    @_kv.set 'fatal', message
 
   # Call the runner. We optionally
   # emit the result of the function (if nothing has been emitted yet).
@@ -168,9 +168,8 @@ class Worker
     this
   
   atomic: (key, value) ->
-    @db.setnx key, JSON.stringify(value), =>
-      @db.get key, (err, real) =>
-        @fiber.run JSON.parse(real)
+    @_kv.atomic_set key, JSON.stringify(value), (err, real) =>
+      @fiber.run JSON.parse(real)
     @yield()
   
   # We're done!
@@ -187,12 +186,12 @@ class Worker
   request_keys: (keys) ->
     @requested = keys
     msg = [@key, keys...].join consts.key_sep
-    @db.publish @req_channel, msg
+    @_pubsub.publish @req_channel, msg
 
   # The dispatcher said to resume, so go look for the missing values again. If
   # we're resuming from a cycle failure, go grab the key.
   resume: ->
-    @db.mget @requested, (err, vals) =>
+    @_kv.get_all @requested, (err, vals) =>
       @fiber.run vals
   
   cycle: ->

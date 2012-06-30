@@ -67,7 +67,7 @@ class RedeyeTest
   #  - Has an emergency timeout that kills the redeye processes
   #  - Waits on `@finish` to be called to complete the test
   run: ->
-    @db.flushdb =>
+    @_kv.flush =>
       @dispatcher = dispatcher.run @opts
       @queue.run => @expect.apply this
       setTimeout (=> @setup.apply this), 100
@@ -82,22 +82,23 @@ class RedeyeTest
   # Terminate the last redis connection, ending the test
   finish: ->
     clearTimeout @timeout
-    @db.end()
+    @_kv.end()
+    @_pubsub.end()
   
   # Send a request to the correct `requests` channel
   request: (args...) ->
     @requested = args.join consts.arg_sep
-    @db.publish _('requests').namespace(@db_index), @requested
+    @_pubsub.publish _('requests').namespace(@db_index), @requested
   
   # Set a redis value, but first convert to JSON
   set: (args..., value) ->
     key = args.join consts.arg_sep
-    @db.set key, JSON.stringify(value)
+    @_kv.set key, JSON.stringify(value)
 
   # Look up and de-jsonify a value from redis
   get: (args..., callback) ->
     key = args.join consts.arg_sep
-    @db.get key, (err, str) ->
+    @_kv.get key, (err, str) ->
       throw err if err
       callback JSON.parse(str)
 

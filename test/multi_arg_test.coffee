@@ -26,6 +26,6 @@ module.exports = redeye_suite
 
     # Just make sure the result is right
     expect: ->
-      @db.get 'problem', (err, str) =>
+      @_kv.get 'problem', (err, str) =>
         @assert.equal str, '13'
         @finish()

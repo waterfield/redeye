@@ -38,7 +38,7 @@ module.exports = redeye_suite
       @request 'z'
     expect: ->
       @assert.eql @dispatcher.doc.cycles[0], ['a', 'b', 'c']
-      @db.mget ['a', 'b', 'c'], (e, arr) =>
+      @_kv.get_all ['a', 'b', 'c'], (e, arr) =>
         @assert.eql arr, [153, 153, 153]
         @finish()
   

@@ -4,13 +4,12 @@ _ = require 'underscore'
 require './util'
 
 module.exports = class ResponseChannel
-  constructor: (options) ->
+  constructor: (@_pubsub, options) ->
     {db_index} = options
-    @_db = db db_index
     @_channel = _('responses').namespace db_index
 
-  end: -> @_db.end()
+  end: -> @_pubsub.end()
 
   listen: (callback) ->
-    @_db.on 'message', callback
-    @_db.subscribe @_channel
+    @_pubsub.message callback
+    @_pubsub.subscribe @_channel

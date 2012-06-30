@@ -25,7 +25,7 @@ module.exports = redeye_suite
     # Make sure that adding two random numbers results in
     # a number between zero and two.
     expect: ->
-      @db.get 'add:rand:rand', (err, str) =>
+      @_kv.get 'add:rand:rand', (err, str) =>
         @assert.match str, /[01]\.[0-9]+/
         @finish()
 
@@ -45,7 +45,7 @@ module.exports = redeye_suite
 
     # Test that all the jobs ran correctly
     expect: ->
-      @db.get 'a', (err, str) =>
+      @_kv.get 'a', (err, str) =>
         @assert.equal str, '"123"'
         @assert.eql @audit.messages, ['?a|b:1', '!b:1', '?a|b:2', '!b:2', '?a|b:3', '!b:3', '!a']
         @finish()
@@ -68,7 +68,7 @@ module.exports = redeye_suite
     # Make sure it gets the right answer. Also that it's speedy!
     expect: ->
       dt = new Date().getTime() - @start_time
-      @db.get 'fib:8', (err, str) =>
+      @_kv.get 'fib:8', (err, str) =>
         @assert.equal str, '34'
         @assert.equal true, (dt < 500)
         @finish()

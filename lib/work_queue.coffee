@@ -74,7 +74,7 @@ class WorkQueue extends events.EventEmitter
   # 
   # You can push the job `!quit` to make the work queue die.
   next: ->
-    @db.blpop 'jobs', 0, (err, [key, str]) =>
+    @_queue.pop 'jobs', (err, str) =>
       if err
         @emit 'next'
         return @error err
@@ -87,7 +87,8 @@ class WorkQueue extends events.EventEmitter
   
   # Shut down the redis connection and stop running workers
   quit: ->
-    @db.end()
+    @_kv.end()
+    @_queue.end()
     @control.end()
     @worker_db.end()
     @callback?()
@@ -105,7 +106,7 @@ class WorkQueue extends events.EventEmitter
   error: (err) ->
     message = err.stack ? err
     console.log message
-    @db.set 'fatal', message
+    @_kv.set 'fatal', message
   
   # Print a debugging statement
   debug: (args...) ->

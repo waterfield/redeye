@@ -1,27 +1,32 @@
-# Database wrapper for Redis
-# ==========================
-# 
-# You can make a new connection like this:
-# 
-#     db = require('./db')()
+# class KeyValue
+#   get: (key, callback) ->
+#   get_all: (keys, callback) ->
+#   keys: (pattern, callback) ->
+#   set: (key, value, callback) ->
+#   atomic_set: (key, value, callback) ->
+#   del: (key, callback) ->
+#   flush: (callback) ->
+#   # map: (object, emit) -> ... emit(key, value) ...
+#   # reduce: (key, values) -> ... return value
+#   map_reduce: (pattern, map, reduce, callback) ->
+#   end: ->
 
-# Require redis itself
-redis = require 'redis'
+# class PubSub
+#   subscribe: (channel) ->
+#   publish: (channel, message) ->
+#   message: (callback) ->
+#   end: ->
 
-# Host and port configuration
-host = '127.0.0.1'
-port = 6379
+# class Queue
+#   push: (name, value) ->
+#   pop: (name, callback) ->
+#   del: (name) ->
+#   end: ->
 
-# Toggle this to enable LOTS of debug output.
-redis.debug_mode = false
+config = require './config'
 
-# Constructs a new client that listens for errors. The optional
-# `db_index` chooses which database to `SELECT` (defaults to 0).
-make_client = (db_index) ->
-  db = redis.createClient port, host
-  db.on 'error', (err) -> throw err
-  db.select db_index if db_index?
-  db
+key_value = require "./adapters/#{config.adapters.key_value}/key_value"
+pub_sub = require "./adapters/#{config.adapters.pub_sub}/pub_sub"
+queue = require "./adapters/#{config.adapters.queue}/queue"
 
-# Export the client-maker. 
-module.exports = make_client
+module.exports = {key_value, pub_sub, queue}
