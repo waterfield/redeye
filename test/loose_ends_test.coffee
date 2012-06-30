@@ -13,7 +13,8 @@ module.exports = redeye_suite
       # But 'b' doesn't emit itself for quite a while
       b: ->
         @emit 'c', 216
-        setTimeout (=> @emit 'b', 42), 1000
+        worker = @worker()
+        setTimeout (=> worker.emit 'b', 42), 1000
 
     # Make the request for 'a'
     setup: ->

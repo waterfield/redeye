@@ -11,7 +11,8 @@ extend_workspace = (methods) ->
 
 Workspace.mixin = (mixins) ->
   for method, fun of mixins
-    Worker.prototype[method] ?= fun
+    delete mixins[method] if Worker.prototype[method]
+  _.extend Worker.prototype, mixins
   extend_workspace mixins
 
 core_methods = {}

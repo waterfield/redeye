@@ -11,7 +11,6 @@ module.exports = redeye_suite
       'add': (a, b) ->
         a = @get a
         b = @get b
-        @for_reals()
         a + b
 
       # 'rand' just resolves to a random number
@@ -31,15 +30,14 @@ module.exports = redeye_suite
         @finish()
 
 
-  # Test that multiple stages of @for_reals works
   'multiple resolution stages':
 
     workers:
       # Requests 'b' multiple times with different arguments
       a: ->
-        b1 = @get 'b', 1; @for_reals()
-        b2 = @get 'b', 2; @for_reals()
-        b3 = @get 'b', 3; @for_reals()
+        b1 = @get 'b', 1
+        b2 = @get 'b', 2
+        b3 = @get 'b', 3
         b1 + b2 + b3 # heh, these are strings :)
       b: (n) -> n
 
@@ -52,22 +50,6 @@ module.exports = redeye_suite
         @assert.eql @audit.messages, ['?a|b:1', '!b:1', '?a|b:2', '!b:2', '?a|b:3', '!b:3', '!a']
         @finish()
   
-  
-  # Test that the last @get has an implied @for_reals()
-  'implicit for_reals':
-  
-    workers:
-      a: -> @get 'b'
-      b: -> 216
-    
-    setup: ->
-      @request 'a'
-    
-    expect: ->
-      @get 'a', (val) =>
-        @assert.eql val, 216
-        @finish()
-
 
   # It wouldn't be complete without a Fibonacci test!
   'fibonacci':
@@ -77,7 +59,6 @@ module.exports = redeye_suite
         return 1 if n < 2
         a = @get 'fib', n-2
         b = @get 'fib', n-1
-        @for_reals()
         a + b
 
     setup: ->

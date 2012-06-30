@@ -14,7 +14,8 @@ module.exports = redeye_suite
       # handler should be called in the mean time.
       b: ->
         @emit 'c', 216
-        setTimeout (=> @emit 'b', 42), 1000
+        worker = @worker()
+        setTimeout (=> worker.emit 'b', 42), 1000
 
     # Make the idle handler just record that idling happened
     setup: ->

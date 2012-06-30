@@ -9,7 +9,7 @@ module.exports = redeye_suite
     # thing: they multiply their arguments. However, 'y' shows how to do
     # this with arguments rather than a compound key.
     workers:
-      x: (a, b) -> @emit @key, parseInt(a) * parseInt(b)
+      x: (a, b) -> @emit @worker().key, parseInt(a) * parseInt(b)
       y: (a, b) -> @emit 'y', a, b, parseInt(a) * parseInt(b)
       
       # The 'problem' job resolves to (2 * 3) + (1 * 7). It does this
@@ -18,7 +18,6 @@ module.exports = redeye_suite
       problem: ->
         a = @get 'x', 2, 3
         b = @get 'y', 1, 7
-        @for_reals()
         a + b
 
     # Kick off the process

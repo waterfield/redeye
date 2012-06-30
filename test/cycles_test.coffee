@@ -6,12 +6,15 @@ module.exports = redeye_suite
     workers:
       z: -> @get 'a'
       a: -> @get 'b'
-      b: -> @get 'c'      
+      b: -> @get 'c'
       c: -> 
         @emit 'q', 666
-        setTimeout (=> @emit 'c', 216), 1500 # 1500
+        worker = @worker()
+        setTimeout (-> worker.emit 'c', 216), 1500
         @get 'a'
     setup: ->
+      @queue.wacky = true
+      @dispatcher.wacky = true
       @dispatcher.on_stuck (doc) =>
         @cycle ?= doc.cycles[0]
       @request 'z'
@@ -26,7 +29,7 @@ module.exports = redeye_suite
       b: ->
         v = @get 'v'
         c = @get 'c', -> 123
-        w = @get_now 'w'
+        w = @get 'w'
         v + c + w
       c: -> @get 'a'
       v: -> 10
@@ -40,14 +43,15 @@ module.exports = redeye_suite
         @finish()
   
   'redundant recovery':
-    workers:
-      a: -> @get 'b', -> 1
-      b: -> @get 'c', -> 2
-      c: -> @get 'a', -> 3
-      z: -> (@get('a') ? 0) + (@get('b') ? 0) + (@get('c') ? 0)
-    setup: ->
-      @request 'z'
-    expect: ->
-      @get 'z', (val) =>
-        @assert.eql val, 6
-        @finish()
+        workers:
+          a: -> @get 'b', -> 1
+          b: -> @get 'c', -> 2
+          c: -> @get 'a', -> 3
+          z: -> (@get('a') ? 0) + (@get('b') ? 0) + (@get('c') ? 0)
+        setup: ->
+          @request 'z'
+        expect: ->
+          @get 'z', (val) =>
+            @assert.eql val, 6
+            @finish()
+    

@@ -6,13 +6,10 @@ module.exports = redeye_suite
   'test emitted side effects':
   
     workers:
-      # 'a' depends on both 'b' and 'c'. Notice that we call `@for_reals`
-      # twice; after running 'b', we know implicitly that 'c' will be satisfied.
-      # But we don't want to ever publish the request for 'c', since there's
-      # not a worker defined for it.
+      # 'a' depends on both 'b' and 'c'.
       a: ->
-        b = @get 'b'; @for_reals()
-        c = @get 'c'; @for_reals()        
+        b = @get 'b'
+        c = @get 'c'
         b + c
       
       # But there's only a worker defined for 'b'!

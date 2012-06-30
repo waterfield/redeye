@@ -48,7 +48,7 @@ class Worker
     vals = @yield()
     if @cycling
       @cycling = false
-      val = @on_cycle.apply this
+      val = @on_cycle.apply @target()
     else
       val = @build JSON.parse(vals[0]), opts.as
     @cache[key] = val
@@ -59,7 +59,7 @@ class Worker
   all: (fun) ->
     @_all = true
     @gets = []
-    fun.apply this
+    fun.apply @target()
     @_all = false
     @_get_all()
   
@@ -109,13 +109,6 @@ class Worker
   yield: ->
     _.tap yield(), => Worker.current = this
   
-  # This is a bit of syntactic sugar. It's the equivalent of:
-  # 
-  #     x = @get key
-  #     @for_reals()
-  #     x
-  get_now: -> @get.apply this, arguments
-
   # If a klass is given, construct a new one; otherwise, just return
   # the raw value.
   build: (value, klass) ->
@@ -143,13 +136,7 @@ class Worker
     @db.set key, JSON.stringify(json)
     @db.publish @resp_channel, key
 
-  # If we've seen this `@for_reals` before, then blow right past it.
-  # Otherwise, abort the runner function and start over (after checking
-  # that our dependencies are met).
-  for_reals: -> true
-
-  # Attempt to run the runner function. If a call to `@for_reals` causes
-  # us to abort, then attempt to resolve the dependencies.
+  # Attempt to run the runner function.
   run: ->
     @fiber = Fiber =>
       @clear()
@@ -169,18 +156,21 @@ class Worker
     console.log message
     @db.set 'fatal', message
 
-  # Call the runner. If it gets all the way through, first check if there
-  # were any unmet dependencies after the last `@for_reals`. If so, we force
-  # one last dependency resolution. Otherwise, we optionally
+  # Call the runner. We optionally
   # emit the result of the function (if nothing has been emitted yet).
   process: ->
     Worker.current = this
-    result = @runner.apply(this, @args)
+    result = @runner.apply(@target(), @args)
     @finish result unless @_async
   
+  target: ->
+    @workspace ?= new Worker.Workspace
+    return @workspace
+    this
+  
   async: (fun) ->
-    fun.apply this
-    yield().apply this
+    fun.apply @target()
+    yield().apply @target()
   
   sync: (fun) ->
     @fiber.run fun
@@ -211,6 +201,9 @@ class Worker
     if @on_cycle
       @cycling = true
       @fiber.run()
+    # XXX: if no @on_cycle is defined, we basically just never
+    # run @fiber again. but it would be nice to actually dispose
+    # of it...
   
   # Set the default wrapper class, which is overridden by `as: `
   wrapper: (klass) ->

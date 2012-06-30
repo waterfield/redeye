@@ -16,15 +16,18 @@ module.exports = redeye_suite
       a: ->
         req1.push 'a'
         @emit 'q', 0
-        setTimeout (=> req2.push 'a'; @emit 'a', 1), 100
+        worker = @worker()
+        setTimeout (=> req2.push 'a'; worker.emit 'a', 1), 100
       b: ->
         req1.push 'b'
         @emit 'q', 0
-        setTimeout (=> req2.push 'b'; @emit 'b', 2), 200
+        worker = @worker()
+        setTimeout (=> req2.push 'b'; worker.emit 'b', 2), 200
       c: ->
         req1.push 'c'
         @emit 'q', 0
-        setTimeout (=> req2.push 'c'; @emit 'c', 3), 300
+        worker = @worker()
+        setTimeout (=> req2.push 'c'; worker.emit 'c', 3), 300
 
     # Request that two random numbers be added together. Actually, only one
     # random number will be created; the key 'rand' is bound to a random number,

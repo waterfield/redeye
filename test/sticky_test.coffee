@@ -8,11 +8,11 @@ module.exports = redeye_suite
     workers:
       # Make sure requesting something already stickied will
       # use that value and not request it from the dispatcher.
-      a: -> @sticky.z = 216; @get 'z'
+      a: -> @worker().sticky.z = 216; @get 'z'
       # Make sure a stickied request gets stored in the cache.
-      b: -> @get_now 'c', sticky: true; @sticky.c
+      b: -> @get 'c', sticky: true; @worker().sticky.c
       c: -> 42
-      all: -> @get 'a'; @get 'b'; @for_reals()
+      all: -> @get 'a'; @get 'b'
 
     # Kick off by requesting 'a'
     setup: ->
