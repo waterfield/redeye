@@ -161,19 +161,18 @@ class Worker
   process: ->
     Worker.current = this
     result = @runner.apply(@target(), @args)
-    @finish result unless @_async
+    @finish result
   
   target: ->
     @workspace ?= new Worker.Workspace
     return @workspace
     this
   
-  async: (fun) ->
-    fun.apply @target()
-    yield().apply @target()
-  
-  sync: (fun) ->
-    @fiber.run fun
+  atomic: (key, value) ->
+    @db.setnx key, JSON.stringify(value), =>
+      @db.get key, (err, real) =>
+        @fiber.run JSON.parse(real)
+    @yield()
   
   # We're done!
   finish: (result) ->
