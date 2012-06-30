@@ -24,9 +24,5 @@
 #   end: ->
 
 config = require './config'
-
-key_value = require "./adapters/#{config.adapters.key_value}/key_value"
-pub_sub = require "./adapters/#{config.adapters.pub_sub}/pub_sub"
-queue = require "./adapters/#{config.adapters.queue}/queue"
-
-module.exports = {key_value, pub_sub, queue}
+for type, adapter of config.adapters
+  exports[type] = require "./adapters/#{adapter}/#{type}"
