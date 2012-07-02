@@ -18,6 +18,7 @@ class Dispatcher
     @deps = {}
     @link = {}
     @_test_mode = options.test_mode
+    @_single_use = options.single_use ? @_test_mode
     @_verbose = options.verbose
     @_idle_timeout = options.idle_timeout ? (if @_test_mode then 500 else 10000)
     @_audit_log = new AuditLog stream: options.audit
@@ -47,6 +48,7 @@ class Dispatcher
       @_requests_channel.end()
       @_responses_channel.end()
       @_control_channel.end()
+      @_quit_handler?()
     setTimeout finish, 500
 
   # Provide a callback to be called when the dispatcher detects the process is stuck
@@ -54,6 +56,9 @@ class Dispatcher
 
   # Set the idle handler
   on_idle: (@_idle_handler) -> this
+  
+  # Set the quit handler
+  on_quit: (@_quit_handler) -> this
 
   # Clear the timeout for idling
   _clear_timeout: ->
@@ -170,7 +175,7 @@ class Dispatcher
     @_dump_link()
     unless --@_seed_count
       @_clear_timeout()
-      @quit() if @_test_mode
+      @quit() if @_single_use
 
   # Called when a key is completed. Any jobs depending on this
   # key are updated, and if they have no more dependencies, are
