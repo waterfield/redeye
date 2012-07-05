@@ -57,12 +57,44 @@ class Worker
   
   # Get multiple keys in parallel, and return them in an array
   all: (fun) ->
-    # @_all = true
-    # @gets = []
-    # fun.apply @target()
-    # @_all = false
-    # @_get_all()
+    @_all = true
+    @gets = []
     fun.apply @target()
+    @_all = false
+    @_get_all()
+  
+  # Request multiple keys in parallel, but don't bother to actually
+  # collect the results.
+  each: (fun) ->
+    @_all = true
+    @gets = []
+    fun.apply @target()
+    @_all = false
+    @_ensure_all()
+  
+  # Request all given but missing keys
+  _ensure_all: ->
+    opts = _.map @gets, (args) -> _.opts args
+    keys = _.map @gets, (args) -> args.join consts.arg_sep
+    rem = keys.length
+    needed = []
+    missing = []
+    for key in keys
+      unless @sticky[key]? || @cache[key]?
+        needed.push key
+    rem = needed.length
+    finish = =>
+      @_skip_get_on_resume = true
+      if missing.length
+        @request_keys missing
+      else
+        @fiber.run()
+    for key in needed
+      do (key) =>
+        @_kv.exists key, (err, exists) ->
+          missing.push key unless exists
+          finish() unless --rem
+    @yield()
   
   # Get all requested keys
   _get_all: ->
@@ -80,7 +112,7 @@ class Worker
       @_kv.get_all needed, (err, vals) =>
         for val, i in vals
           if val
-            values[needed[i]] = val
+            values[needed[i]] = JSON.parse(val)
           else
             missing.push needed[i]
         if missing.length
@@ -88,9 +120,9 @@ class Worker
         else
           @fiber.run []
       for val, i in @yield()
-        values[missing[i]] = val
+        values[missing[i]] = JSON.parse(val)
     for key, i in keys
-      val = @build JSON.parse(values[key]), opts[i].as
+      val = @build values[key], opts[i].as
       @cache[key] ?= val
       @sticky[key] ?= val if opts[i].sticky
       val
@@ -194,6 +226,9 @@ class Worker
   # The dispatcher said to resume, so go look for the missing values again. If
   # we're resuming from a cycle failure, go grab the key.
   resume: ->
+    if @_skip_get_on_resume
+      @_skip_get_on_resume = false
+      return @fiber.run()
     @_kv.get_all @requested, (err, vals) =>
       @fiber.run vals
   
@@ -201,6 +236,9 @@ class Worker
     if @on_cycle
       @cycling = true
       @fiber.run()
+    # else
+    #   @queue.finish @key
+    #   @fiber = null
     # XXX: if no @on_cycle is defined, we basically just never
     # run @fiber again. but it would be nice to actually dispose
     # of it...

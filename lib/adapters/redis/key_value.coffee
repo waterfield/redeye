@@ -9,6 +9,8 @@ module.exports = class RedisKeyValue extends RedisAdapter
     @redis.keys pattern, callback
   set: (key, value, callback) ->
     @redis.set key, value, callback
+  exists: (key, callback) ->
+    @redis.exists key, callback
   atomic_set: (key, value, callback) ->
     @redis.setnx key, value, (err) =>
       return callback(err) if err

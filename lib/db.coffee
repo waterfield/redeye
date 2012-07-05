@@ -6,6 +6,7 @@
 #   atomic_set: (key, value, callback) ->
 #   del: (key, callback) ->
 #   flush: (callback) ->
+#   exists: (key, callback) ->
 #   # map: (object, emit) -> ... emit(key, value) ...
 #   # reduce: (key, values) -> ... return value
 #   map_reduce: (pattern, map, reduce, callback) ->
