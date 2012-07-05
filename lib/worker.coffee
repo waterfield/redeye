@@ -82,7 +82,7 @@ class Worker
     for key in keys
       unless @sticky[key]? || @cache[key]?
         needed.push key
-    rem = needed.length
+    return unless rem = needed.length
     finish = =>
       @_skip_get_on_resume = true
       if missing.length
