@@ -68,8 +68,8 @@ class Worker
   # Notify the dispatcher of our dependency (regardless of whether we're
   # going to request that key).
   notify_dep: (key) ->
-    msg = ['!dep', @key, key].join consts.key_sep
-    @db.publish @req_channel, msg
+    # msg = ['!dep', @key, key].join consts.key_sep
+    # @db.publish @req_channel, msg
   
   # Return an instance of the default, not-yet-instantiated object. If
   # `@wrapper` was called, then it's an instance of this clas with `undefined`
