@@ -85,6 +85,7 @@ class WorkQueue extends events.EventEmitter
         @_worker_count++
         @workers[str] = new Worker(str, this, @sticky)
         @workers[str].run()
+        # console.log @_worker_count
       catch e
         @error e unless e == 'no_runner'
       @emit 'next'

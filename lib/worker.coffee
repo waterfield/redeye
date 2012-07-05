@@ -57,6 +57,7 @@ class Worker
   
   # Get multiple keys in parallel, and return them in an array
   all: (fun) ->
+    # return fun.apply @target()
     @_all = true
     @gets = []
     fun.apply @target()
@@ -66,6 +67,7 @@ class Worker
   # Request multiple keys in parallel, but don't bother to actually
   # collect the results.
   each: (fun) ->
+    # return fun.apply @target()
     @_all = true
     @gets = []
     fun.apply @target()
