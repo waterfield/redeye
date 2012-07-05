@@ -57,11 +57,12 @@ class Worker
   
   # Get multiple keys in parallel, and return them in an array
   all: (fun) ->
-    @_all = true
-    @gets = []
+    # @_all = true
+    # @gets = []
+    # fun.apply @target()
+    # @_all = false
+    # @_get_all()
     fun.apply @target()
-    @_all = false
-    @_get_all()
   
   # Get all requested keys
   _get_all: ->
@@ -97,8 +98,8 @@ class Worker
   # Notify the dispatcher of our dependency (regardless of whether we're
   # going to request that key).
   notify_dep: (key) ->
-    msg = ['!dep', @key, key].join consts.key_sep
-    @_pubsub.publish @req_channel, msg
+    # msg = ['!dep', @key, key].join consts.key_sep
+    # @_pubsub.publish @req_channel, msg
   
   # Search for the given keys in the database, then remember them.
   keys: (str) ->
@@ -179,6 +180,7 @@ class Worker
     num_workers--
     @queue.finish @key
     @emit @key, (result ? null) unless @emitted
+    @fiber = null
 
   # Ask the dispatcher to providethe given keys by publishing on the
   # `requests` channel. Then block-wait to be signalled by a response

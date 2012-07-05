@@ -1,4 +1,5 @@
 { "adapters": {
     "key_value": "redis",
     "pub_sub": "redis",
-    "queue": "redis" }}
+    "queue": "redis",
+    "adapter": "redis" }}

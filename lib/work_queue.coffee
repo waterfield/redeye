@@ -22,6 +22,7 @@ class WorkQueue extends events.EventEmitter
     @runners = {}
     @sticky = {}
     @mixins = {}
+    @_worker_count = 0
     @listen()
     @on 'next', => @next()
   
@@ -81,6 +82,7 @@ class WorkQueue extends events.EventEmitter
         @emit 'next'
         return @error err
       try
+        @_worker_count++
         @workers[str] = new Worker(str, this, @sticky)
         @workers[str].run()
       catch e
@@ -103,6 +105,7 @@ class WorkQueue extends events.EventEmitter
     
   # Mark the given worker as finished (release its memory)
   finish: (key) ->
+    @_worker_count--
     delete @workers[key]
   
   # Mark that a fatal exception occurred
