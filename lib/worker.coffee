@@ -37,6 +37,7 @@ class Worker
     @on_cycle = _.callback args
     opts = _.opts args
     key = args.join consts.arg_sep
+    @_last_key = key
     @notify_dep key
     if saved = @sticky[key] ? @cache[key]
       return saved
@@ -168,8 +169,8 @@ class Worker
     @emitted = true
     key = args.join consts.arg_sep
     json = value?.toJSON?() ? value
-    @_kv.set key, json
-    @_pubsub.publish @resp_channel, key
+    @_kv.set key, json, =>
+      @_pubsub.publish @resp_channel, key
 
   # Attempt to run the runner function.
   run: ->
@@ -214,6 +215,7 @@ class Worker
     num_workers--
     @queue.finish @key
     @emit @key, (result ? null) unless @emitted
+    # console.log 'finish', @key # XXX
     @fiber = null
 
   # Ask the dispatcher to providethe given keys by publishing on the
@@ -232,6 +234,7 @@ class Worker
       @_skip_get_on_resume = false
       return @fiber.run()
     @_kv.get_all @requested, (err, vals) =>
+      console.log 'fail', @key unless @fiber
       @fiber.run vals
   
   cycle: ->
