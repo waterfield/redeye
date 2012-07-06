@@ -5,6 +5,7 @@ module.exports = class RedisAdapter
     @redis = options.connection ? conn(options)
     @redis._uses ?= 0
     @redis._uses++
+  connect: ->
   end: ->
     unless --@redis._uses
       @redis.end()

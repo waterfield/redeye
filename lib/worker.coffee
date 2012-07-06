@@ -50,7 +50,7 @@ class Worker
       @cycling = false
       val = @on_cycle.apply @target()
     else
-      val = @build JSON.parse(vals[0]), opts.as
+      val = @build vals[0], opts.as
     @cache[key] = val
     @sticky[key] = val if opts.sticky
     val
@@ -114,7 +114,7 @@ class Worker
       @_kv.get_all needed, (err, vals) =>
         for val, i in vals
           if val
-            values[needed[i]] = JSON.parse(val)
+            values[needed[i]] = val
           else
             missing.push needed[i]
         if missing.length
@@ -122,7 +122,7 @@ class Worker
         else
           @fiber.run []
       for val, i in @yield()
-        values[missing[i]] = JSON.parse(val)
+        values[missing[i]] = val
     for key, i in keys
       val = @build values[key], opts[i].as
       @cache[key] ?= val
@@ -168,7 +168,7 @@ class Worker
     @emitted = true
     key = args.join consts.arg_sep
     json = value?.toJSON?() ? value
-    @_kv.set key, JSON.stringify(json)
+    @_kv.set key, json
     @_pubsub.publish @resp_channel, key
 
   # Attempt to run the runner function.
@@ -204,8 +204,8 @@ class Worker
     this
   
   atomic: (key, value) ->
-    @_kv.atomic_set key, JSON.stringify(value), (err, real) =>
-      @fiber.run JSON.parse(real)
+    @_kv.atomic_set key, value, (err, real) =>
+      @fiber.run real
     @yield()
   
   # We're done!

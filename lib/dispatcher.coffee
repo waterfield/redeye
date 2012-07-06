@@ -86,7 +86,7 @@ class Dispatcher
 
   # Store the current links in the 'deps' key
   _dump_link: ->
-    @_kv.set 'deps', JSON.stringify(@link)
+    @_kv.set 'deps', @link
 
   # The given key is a 'seed' request. In test mode, completion of
   # the seed request signals termination of the workers.
