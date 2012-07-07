@@ -52,6 +52,10 @@ class RedeyeTest
     @queue = redeye.queue @opts
     @add_workers()
   
+  connect: (callback) ->
+    @_kv.connect =>
+      @_pubsub.connect callback
+  
   # Add the workers defined by the `workers` key of the test to
   # the WorkQueue we control.
   add_workers: ->
@@ -68,11 +72,13 @@ class RedeyeTest
   #  - Has an emergency timeout that kills the redeye processes
   #  - Waits on `@finish` to be called to complete the test
   run: ->
-    @_kv.flush =>
-      @dispatcher = dispatcher.run @opts
-      @queue.run => @expect.apply this
-      setTimeout (=> @setup.apply this), 100
-      @timeout = setTimeout (=> @die()), 5000
+    @connect =>
+      @_kv.flush =>
+        @dispatcher = dispatcher.run @opts
+        @dispatcher.connect =>
+          @queue.run => @expect.apply this
+          setTimeout (=> @setup.apply this), 100
+          @timeout = setTimeout (=> @die()), 5000
 
   # Forcefully quit the test
   die: ->
@@ -91,17 +97,16 @@ class RedeyeTest
     @requested = args.join consts.arg_sep
     @_pubsub.publish _('requests').namespace(@db_index), @requested
   
-  # Set a redis value, but first convert to JSON
   set: (args..., value) ->
     key = args.join consts.arg_sep
-    @_kv.set key, JSON.stringify(value)
+    @_kv.set key, value
 
   # Look up and de-jsonify a value from redis
   get: (args..., callback) ->
     key = args.join consts.arg_sep
-    @_kv.get key, (err, str) ->
+    @_kv.get key, (err, val) ->
       throw err if err
-      callback JSON.parse(str)
+      callback val
 
 # This file exports a method which replaces
 # a whole set of tests. See the comment at the

@@ -10,6 +10,9 @@ module.exports = class RequestChannel
     @_channel = _('requests').namespace db_index
 
   end: -> @_pubsub.end()
+  
+  connect: (callback) ->
+    @_pubsub.connect callback
 
   listen: (callback) ->
     @_pubsub.message (ch, str) ->

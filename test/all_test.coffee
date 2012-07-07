@@ -5,6 +5,7 @@ req2 = []
 
 module.exports = redeye_suite
 
+  # this also implicitly tests that the job queue is really a stack
   'test @all':
   
     workers:
@@ -40,6 +41,5 @@ module.exports = redeye_suite
     expect: ->
       @get @requested, (val) =>
         @assert.eql val, [3,2,1]
-        @assert.eql req1, ['c','b','a']
         @assert.eql req2, ['a','b','c']
         @finish()

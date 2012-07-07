@@ -2,19 +2,29 @@ RedisAdapter = require './adapter'
 
 module.exports = class RedisKeyValue extends RedisAdapter
   get: (key, callback) ->
-    @redis.get key, callback
+    log = key.split(':')[0] == 'ca_gas'
+    console.log 'get', key if log
+    @redis.get key, (err, val) ->
+      console.log 'get done', key if log
+      callback err, (JSON.parse(val) if val)
   get_all: (keys, callback) ->
-    @redis.mget keys, callback
+    @redis.mget keys, (err, arr) ->
+      return callback(err) if err
+      callback null, (JSON.parse(val) for val in arr)
   keys: (pattern, callback) ->
     @redis.keys pattern, callback
   set: (key, value, callback) ->
-    @redis.set key, value, callback
+    log = key.split(':')[0] == 'ca_gas'
+    console.log 'set', key if log
+    @redis.set key, JSON.stringify(value), (err) ->
+      console.log 'set done', key if log
+      callback err if callback
   exists: (key, callback) ->
     @redis.exists key, callback
   atomic_set: (key, value, callback) ->
-    @redis.setnx key, value, (err) =>
+    @redis.setnx key, JSON.stringify(value), (err) =>
       return callback(err) if err
-      @redis.get key, callback
+      @get key, callback
   map_reduce: (pattern, map, reduce, callback) ->
     @keys pattern, (err, keys) =>
       return callback(err) if err

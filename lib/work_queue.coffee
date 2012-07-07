@@ -26,6 +26,13 @@ class WorkQueue extends events.EventEmitter
     @listen()
     @on 'next', => @next()
   
+  connect: (callback) ->
+    @_kv.connect =>
+      @_queue.connect =>
+        @_pubsub.connect =>
+          @_worker_kv.connect =>
+            @_worker_pubsub.connect callback
+  
   # Subscribe to channels
   listen: ->
     @_pubsub.message (channel, msg) => @perform msg
@@ -62,7 +69,7 @@ class WorkQueue extends events.EventEmitter
   
   # Run the work queue, calling the given callback on completion
   run: (@callback) ->
-    @next()  
+    @connect => @next()
     
   # Add a worker to the context
   worker: (prefix, runner) ->

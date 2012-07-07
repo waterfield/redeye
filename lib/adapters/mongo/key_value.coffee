@@ -27,7 +27,7 @@ module.exports = class MongoKeyValue extends MongoAdapter
       # console.log 'exists', key, '->', obj?
       callback err, obj?
   atomic_set: (key, value, callback) ->
-    @coll.insert {key, value}, {safe: true}, (err) =>
+    @coll.insert {_id: {atomic: key}, key, value}, {safe: true}, (err) =>
       if err
         @get key, callback
       else

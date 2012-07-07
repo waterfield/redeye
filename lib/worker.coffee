@@ -171,6 +171,8 @@ class Worker
     json = value?.toJSON?() ? value
     @_kv.set key, json, =>
       @_pubsub.publish @resp_channel, key
+      @fiber.run() if @fiber
+    @yield() if @fiber
 
   # Attempt to run the runner function.
   run: ->
@@ -230,6 +232,7 @@ class Worker
   # The dispatcher said to resume, so go look for the missing values again. If
   # we're resuming from a cycle failure, go grab the key.
   resume: ->
+    @fiber ?= Fiber => @run()
     if @_skip_get_on_resume
       @_skip_get_on_resume = false
       return @fiber.run()
@@ -241,6 +244,8 @@ class Worker
     if @on_cycle
       @cycling = true
       @fiber.run()
+    else
+      @fiber = null
     # else
     #   @queue.finish @key
     #   @fiber = null

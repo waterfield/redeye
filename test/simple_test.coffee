@@ -46,7 +46,7 @@ module.exports = redeye_suite
     # Test that all the jobs ran correctly
     expect: ->
       @_kv.get 'a', (err, str) =>
-        @assert.equal str, '"123"'
+        @assert.equal str, '123'
         @assert.eql @audit.messages, ['?a|b:1', '!b:1', '?a|b:2', '!b:2', '?a|b:3', '!b:3', '!a']
         @finish()
   
@@ -69,6 +69,6 @@ module.exports = redeye_suite
     expect: ->
       dt = new Date().getTime() - @start_time
       @_kv.get 'fib:8', (err, str) =>
-        @assert.equal str, '34'
+        @assert.equal str, 34
         @assert.equal true, (dt < 500)
         @finish()

@@ -33,6 +33,12 @@ class Dispatcher
     @_seed_count = 0
     @_seeds = {}
 
+  connect: (callback) ->
+    @_kv.connect =>
+      @_control_channel.connect =>
+        @_requests_channel.connect =>
+          @_responses_channel.connect callback
+
   # Subscribe to the `requests` and `responses` channels.
   listen: ->
     @_requests_channel.listen (source, keys) => @_requested source, keys

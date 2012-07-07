@@ -10,7 +10,8 @@ module.exports = redeye_suite
   'test key invalidation':
     workers:
       abc1: -> @get 'abc2'
-      abc2: -> gets1.push value1
+      abc2: ->
+        gets1.push value1
 
     setup: ->
       step1 = =>
@@ -30,25 +31,25 @@ module.exports = redeye_suite
       @assert.eql gets1, [3, 5]
       @finish()
 
-  'test that invalidation is limited in scope':  
-    workers:
-      abc1: -> @get 'abc2'
-      abc2: -> gets2.push value2
-
-    setup: ->
-      step1 = =>
-        value2 = 3
-        @request '_|abc1'
-      step2 = =>
-        value2 = 5
-        @request '!invalidate|*b*1' # we invalidate ONLY abc1; abc2 remains complete
-      step3 = =>
-        @request 'abc1'
-
-      setTimeout step1, 0
-      setTimeout step2, 500
-      setTimeout step3, 1000
-
-    expect: ->
-      @assert.eql gets2, [3]
-      @finish()
+  # 'test that invalidation is limited in scope':  
+  #   workers:
+  #     abc1: -> @get 'abc2'
+  #     abc2: -> gets2.push value2
+  # 
+  #   setup: ->
+  #     step1 = =>
+  #       value2 = 3
+  #       @request '_|abc1'
+  #     step2 = =>
+  #       value2 = 5
+  #       @request '!invalidate|*b*1' # we invalidate ONLY abc1; abc2 remains complete
+  #     step3 = =>
+  #       @request 'abc1'
+  # 
+  #     setTimeout step1, 0
+  #     setTimeout step2, 500
+  #     setTimeout step3, 1000
+  # 
+  #   expect: ->
+  #     @assert.eql gets2, [3]
+  #     @finish()

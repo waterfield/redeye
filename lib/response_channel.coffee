@@ -8,6 +8,9 @@ module.exports = class ResponseChannel
     {db_index} = options
     @_pubsub = db.pub_sub options
     @_channel = _('responses').namespace db_index
+  
+  connect: (callback) ->
+    @_pubsub.connect callback
 
   end: -> @_pubsub.end()
 

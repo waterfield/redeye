@@ -37,10 +37,10 @@ module.exports = redeye_suite
     # `baz` should be set to `quux`.
     expect: ->
       @_kv.get_all ['foo', 'bar', 'baz', 'quux'], (e, [foo, bar, baz, quux]) =>
-        @assert.equal foo, '14'
-        @assert.equal bar, '{"value":7}'
-        @assert.equal baz, '216'
-        @assert.equal quux, '216'
+        @assert.eql foo, 14
+        @assert.eql bar, {value: 7}
+        @assert.eql baz, 216
+        @assert.eql quux, 216
         @finish()
 
     
