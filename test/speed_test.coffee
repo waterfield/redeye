@@ -26,5 +26,5 @@ module.exports = redeye_suite
       dt = new Date().getTime() - @start_time
       @get @requested, (val) =>
         @assert.equal val, big_num
-        @assert.equal true, (dt < 2000)
+        @assert.equal true, (dt < 10000)
         @finish()
