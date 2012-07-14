@@ -23,7 +23,7 @@ class Dispatcher
     @_idle_timeout = options.idle_timeout ? (if @_test_mode then 500 else 10000)
     @_audit_log = new AuditLog stream: options.audit
     {db_index} = options
-    @_kv = db.key_value options
+    @_kv = db.key_value {db_index}
     @_control_channel = new ControlChannel {db_index}
     @_requests_channel = new RequestChannel {db_index}
     @_responses_channel = new ResponseChannel {db_index}
@@ -91,8 +91,8 @@ class Dispatcher
       @_seed source
 
   # Store the current links in the 'deps' key
-  _dump_link: ->
-    @_kv.set 'deps', @link
+  _dump_link: (callback) ->
+    @_kv.set 'deps', @link, callback
 
   # The given key is a 'seed' request. In test mode, completion of
   # the seed request signals termination of the workers.
@@ -178,10 +178,10 @@ class Dispatcher
 
   # The seed request was completed. In test mode, quit the workers.
   _unseed: ->
-    @_dump_link()
-    unless --@_seed_count
-      @_clear_timeout()
-      @quit() if @_single_use
+    @_dump_link =>
+      unless --@_seed_count
+        @_clear_timeout()
+        @quit() if @_single_use
 
   # Called when a key is completed. Any jobs depending on this
   # key are updated, and if they have no more dependencies, are
