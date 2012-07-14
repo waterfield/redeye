@@ -1,5 +1,7 @@
 MongoAdapter = require './adapter'
 
+json_compatability = true
+
 module.exports = class MongoKeyValue extends MongoAdapter
   get: (key, callback) ->
     @coll.findOne {key}, ['value'], (err, obj) ->
@@ -20,6 +22,9 @@ module.exports = class MongoKeyValue extends MongoAdapter
       callback null, (obj.key for obj in objs)
   set: (key, value, callback) ->
     # console.log 'set', key
+    if json_compatability
+      value = JSON.parse(JSON.stringify(value))
+    console.log this unless @coll
     @coll.insert {key, value}, {safe: true}, (err) ->
       callback(err) if callback
   exists: (key, callback) ->

@@ -1,7 +1,7 @@
 {Db, Server} = require 'mongodb'
 
 module.exports = class MongoAdapter
-  constructor: (@options) ->
+  constructor: (@options = {}) ->
   connect: (callback) ->
     dbname = 'redeye' + (@options.db_index ? '')
     dbname = @options.database ? dbname
