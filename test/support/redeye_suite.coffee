@@ -77,7 +77,7 @@ class RedeyeTest
         @dispatcher = dispatcher.run @opts
         @dispatcher.connect =>
           @queue.run => @expect.apply this
-          setTimeout (=> @setup.apply this), 100
+          setTimeout (=> (@fiber = Fiber => @setup.apply this).run()), 100
           @timeout = setTimeout (=> @die()), 5000
 
   # Forcefully quit the test
@@ -91,6 +91,7 @@ class RedeyeTest
     clearTimeout @timeout
     @_kv.end()
     @_pubsub.end()
+    delete @fiber
   
   # Send a request to the correct `requests` channel
   request: (args...) ->
@@ -99,7 +100,10 @@ class RedeyeTest
   
   set: (args..., value) ->
     key = args.join consts.arg_sep
-    @_kv.set key, value
+    @_kv.del key, =>
+      @_kv.set key, value, =>
+        @fiber.run()
+    yield()
 
   # Look up and de-jsonify a value from redis
   get: (args..., callback) ->
