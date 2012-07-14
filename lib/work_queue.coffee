@@ -23,6 +23,7 @@ class WorkQueue extends events.EventEmitter
     @sticky = {}
     @mixins = {}
     @_worker_count = 0
+    @_params = {}
     @listen()
     @on 'next', => @next()
   
@@ -72,11 +73,15 @@ class WorkQueue extends events.EventEmitter
     @connect => @next()
     
   # Add a worker to the context
-  worker: (prefix, runner) ->
+  worker: (prefix, params..., runner) ->
+    @_params[prefix] = params if params.length
     @runners[prefix] = runner
     shortcut = {}
     shortcut[prefix] = (args...) -> @get prefix, args...
     Workspace.mixin shortcut
+  
+  params_for: (prefix) ->
+    @_params[prefix]
 
   # Look for the next job using BLPOP on the "jobs" queue. This
   # will use an event emitter to call `next` again, so the stack

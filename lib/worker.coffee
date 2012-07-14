@@ -202,9 +202,12 @@ class Worker
     @finish result
   
   target: ->
-    @workspace ?= new Worker.Workspace
-    return @workspace
-    this
+    return @workspace if @workspace
+    @workspace = new Worker.Workspace
+    if params = @queue.params_for[@prefix]
+      for param, i in params
+        @workspace[param] = @args[i]
+    @workspace
   
   atomic: (key, value) ->
     @_kv.atomic_set key, value, (err, real) =>
