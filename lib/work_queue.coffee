@@ -76,9 +76,7 @@ class WorkQueue extends events.EventEmitter
   worker: (prefix, params..., runner) ->
     @_params[prefix] = params if params.length
     @runners[prefix] = runner
-    shortcut = {}
-    shortcut[prefix] = (args...) -> @get prefix, args...
-    Workspace.mixin shortcut
+    Workspace.prototype[prefix] = (args...) -> @get prefix, args...
   
   params_for: (prefix) ->
     @_params[prefix]

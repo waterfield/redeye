@@ -204,7 +204,7 @@ class Worker
   target: ->
     return @workspace if @workspace
     @workspace = new Worker.Workspace
-    if params = @queue.params_for[@prefix]
+    if params = @queue.params_for(@prefix)
       for param, i in params
         @workspace[param] = @args[i]
     @workspace

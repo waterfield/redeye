@@ -6,11 +6,10 @@ class Workspace
     # if we provided no arguments, only assume it's a new-style
     # key if the worker defines its parameters
     callback = _.callback args
-    opts = _.opts args
     obj = args[0]
     queue = Worker.current.queue
     obj = {} if (!args.length) && queue.params_for(prefix)
-    if (typeof(obj) == 'object') && !('str' of obj && 'date' of obj)
+    if (typeof(obj) == 'object') && !('str' of obj || 'as' of obj || 'sticky' of obj)
       unless params = queue.params_for prefix
         throw new Error "No parameters defined for '#{prefix}'"
       root = Worker.current.workspace
@@ -18,7 +17,7 @@ class Workspace
         arg = obj[param] ? @[param] ? root[param]
         unless arg?
           throw new Error "Can't determine parameter '#{param}' for '#{prefix}'"
-    args.push opts if opts
+        arg
     args.push callback if callback
     Worker.current.get prefix, args...
   
