@@ -1,5 +1,5 @@
 { "adapters": {
-    "key_value": "mongo",
+    "key_value": "redis",
     "pub_sub": "redis",
     "queue": "redis",
-    "adapter": "mongo" }}
+    "adapter": "redis" }}
