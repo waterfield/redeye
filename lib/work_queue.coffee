@@ -24,21 +24,22 @@ class WorkQueue extends events.EventEmitter
     @mixins = {}
     @_worker_count = 0
     @_params = {}
+    @_as = {}
     @listen()
     @on 'next', => @next()
-  
+
   connect: (callback) ->
     @_kv.connect =>
       @_queue.connect =>
         @_pubsub.connect =>
           @_worker_kv.connect =>
             @_worker_pubsub.connect callback
-  
+
   # Subscribe to channels
   listen: ->
     @_pubsub.message (channel, msg) => @perform msg
     @_pubsub.subscribe _('control').namespace(@options.db_index)
-  
+
   # React to a control message sent by the dispatcher
   perform: (msg) ->
     [action, args...] = msg.split consts.key_sep
@@ -49,14 +50,14 @@ class WorkQueue extends events.EventEmitter
       when 'reset' then @reset()
       when 'cycle' then @cycle_detected args...
       when 'info' then @dump_info()
-  
+
   dump_info: ->
     console.log util.inspect(this, false, null, true)
-      
+
   # Resume the given worker (if it's one of ours)
   resume: (key) ->
     @workers[key]?.resume()
-  
+
   # Erase the given key from the sticky cache (it was invalidated).
   erase: (key) ->
     delete @sticky[key]
@@ -67,24 +68,31 @@ class WorkQueue extends events.EventEmitter
   # cycled dependencies have been met now.
   cycle_detected: (key, dependencies...) ->
     @workers[key]?.cycle()# dependencies
-  
+
   # Run the work queue, calling the given callback on completion
   run: (@callback) ->
     @connect => @next()
-    
+
   # Add a worker to the context
   worker: (prefix, params..., runner) ->
     @_params[prefix] = params if params.length
     @runners[prefix] = runner
     Workspace.prototype[prefix] = (args...) -> @get prefix, args...
-  
+
+  # Add an accessor that @gets an input
+  input: (prefix, params...) ->
+    opts = _.opts params
+    @_params[prefix] = params
+    @_as[prefix] = opts.as
+    Workspace.prototype[prefix] = (args...) -> @get prefix, args...
+
   params_for: (prefix) ->
     @_params[prefix]
 
   # Look for the next job using BLPOP on the "jobs" queue. This
   # will use an event emitter to call `next` again, so the stack
   # doesn't get large.
-  # 
+  #
   # You can push the job `!quit` to make the work queue die.
   next: ->
     @_queue.pop 'jobs', (err, str) =>
@@ -99,7 +107,7 @@ class WorkQueue extends events.EventEmitter
       catch e
         @error e unless e == 'no_runner'
       @emit 'next'
-  
+
   # Shut down the redis connection and stop running workers
   quit: ->
     @_kv.end()
@@ -108,38 +116,38 @@ class WorkQueue extends events.EventEmitter
     @_worker_kv.end()
     @_worker_pubsub.end()
     @callback?()
-  
+
   # Clean out the sticky cache
   reset: ->
     console.log 'worker resetting'
     @sticky = {}
-    
+
   # Mark the given worker as finished (release its memory)
   finish: (key) ->
     @_worker_count--
     delete @workers[key]
-  
+
   # Mark that a fatal exception occurred
   error: (err) ->
     message = err.stack ? err
     console.log message
     @_kv.set 'fatal', message
-  
+
   # Print a debugging statement
   debug: (args...) ->
     #console.log 'queue:', args...
-  
+
   # Alias for `Worker.mixin`
   mixin: (mixins) ->
     Workspace.mixin mixins
-  
+
   # Provide a callback to be executed in the context
   # of a worker whenever it has finished running, but before
   # saving its resutlts
   on_finish: (callback) ->
     Worker.finish_callback = callback
     this
-  
+
   # Provide a callback to be called every time the worker begings running
   on_clear: (callback) ->
     Worker.clear_callback = callback

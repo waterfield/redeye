@@ -5,6 +5,10 @@ class Subspace extends Workspace
   constructor: (@b) ->
   value: -> @x()
 
+class Foo extends Workspace
+  constructor: (@value) ->
+  foo: -> @value * 2
+
 module.exports = redeye_suite
 
   'test named params come through as @ locals':
@@ -44,4 +48,16 @@ module.exports = redeye_suite
     expect: ->
       @get @requested, (value) =>
         @assert.equal value, 'foobaz'
+        @finish()
+
+  'test that declared type is used to build get':
+    setup: ->
+      @queue.input 'foo', as: Foo
+      @queue.worker 'x', -> @foo().foo()
+      @set 'foo', 3
+      @request 'x'
+
+    expect: ->
+      @get @requested, (value) =>
+        @assert.equal value, 6
         @finish()

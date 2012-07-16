@@ -25,6 +25,9 @@ class Workspace
     args.push callback if callback
     Worker.current.get prefix, args...
 
+  toString: ->
+    "<Workspace: #{@worker().prefix}>"
+
 extend_workspace = (methods) ->
   for method, fun of methods
     do (method, fun) ->
