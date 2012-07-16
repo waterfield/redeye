@@ -14,13 +14,17 @@ class Workspace
         throw new Error "No parameters defined for '#{prefix}'"
       root = Worker.current.workspace
       args = for param in params
-        arg = obj[param] ? @[param] ? root[param]
-        unless arg?
+        if obj[param]?
+          obj[param]
+        else if @hasOwnProperty param
+          @[param]
+        else if root.hasOwnProperty param
+          root[param]
+        else
           throw new Error "Can't determine parameter '#{param}' for '#{prefix}'"
-        arg
     args.push callback if callback
     Worker.current.get prefix, args...
-  
+
 extend_workspace = (methods) ->
   for method, fun of methods
     do (method, fun) ->

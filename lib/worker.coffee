@@ -133,8 +133,8 @@ class Worker
   # Notify the dispatcher of our dependency (regardless of whether we're
   # going to request that key).
   notify_dep: (key) ->
-    # msg = ['!dep', @key, key].join consts.key_sep
-    # @_pubsub.publish @req_channel, msg
+    msg = ['!dep', @key, key].join consts.key_sep
+    @_pubsub.publish @req_channel, msg
   
   # Search for the given keys in the database, then remember them.
   keys: (str) ->

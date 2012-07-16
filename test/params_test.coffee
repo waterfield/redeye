@@ -5,9 +5,9 @@ class Subspace extends Workspace
   constructor: (@b) ->
   value: -> @x()
 
-module.exports = redeye_suite 
+module.exports = redeye_suite
 
-  'test named params come through as @ locals':        
+  'test named params come through as @ locals':
     setup: ->
       @queue.worker 'x', 'a', 'b', -> @a + @b
       @request 'x', 'foo', 'bar'
@@ -15,7 +15,7 @@ module.exports = redeye_suite
       @get @requested, (value) =>
         @assert.equal value, 'foobar'
         @finish()
-  
+
   'test we can request named worker via object':
     setup: ->
       @queue.worker 'x', 'a', 'b', -> @a + @b
@@ -35,7 +35,7 @@ module.exports = redeye_suite
       @get @requested, (value) =>
         @assert.equal value, 'foobar'
         @finish()
-  
+
   'test that sub-workspaces can override some locals':
     setup: ->
       @queue.worker 'x', 'a', 'b', -> @a + @b

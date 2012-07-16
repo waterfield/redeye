@@ -12,11 +12,11 @@ module.exports = redeye_suite
       # Make sure a stickied request gets stored in the cache.
       b: -> @get 'c', sticky: true; @worker().sticky.c
       c: -> 42
-      all: -> @get 'a'; @get 'b'
+      _all: -> @get 'a'; @get 'b'
 
     # Kick off by requesting 'a'
     setup: ->
-      @request 'all'
+      @request '_all'
 
     # Assert that the sticky tests are set to the right values.
     expect: ->

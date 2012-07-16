@@ -24,13 +24,13 @@ module.exports = redeye_suite
       # `quux` is required by the `baz` method of `bar` (um... names are hard?)
       quux: -> 216
       # go grab all the requested keys
-      all: (keys...) -> @get key for key in keys
+      _all: (keys...) -> @get key for key in keys
 
     # Kick off by requesting 'foo' and 'baz'
     setup: ->
         @queue.mixin
           quux: -> @get 'quux'
-        @request 'all', 'foo', 'baz'
+        @request '_all', 'foo', 'baz'
 
     # Assert that all the keys get set correctly. `bar` should be a JSON blob.
     # `foo` should be twice it's `value` key. `quux` should be just 216, and
