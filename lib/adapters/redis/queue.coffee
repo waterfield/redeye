@@ -13,3 +13,5 @@ module.exports = class RedisQueue extends RedisAdapter
       callback(null, v)
   del: (name, callback) ->
     @redis.del name, callback
+  range: (name, from, to, callback) ->
+    @redis.lrange name, from, to, callback
