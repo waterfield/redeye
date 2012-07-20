@@ -62,7 +62,7 @@ class Dispatcher
 
   # Set the idle handler
   on_idle: (@_idle_handler) -> this
-  
+
   # Set the quit handler
   on_quit: (@_quit_handler) -> this
 
@@ -84,7 +84,7 @@ class Dispatcher
     else if source == '!dump'
       @_dump_link()
     else if source == '!replace'
-      @_replace keys[0], keys[1..-1].join('|')
+      @_replace keys[0], JSON.parse(keys[1..-1].join('|'))
     else if keys?.length
       @_new_request source, keys
     else
@@ -110,12 +110,12 @@ class Dispatcher
     @deps = {}
     @doc = null
     @_control_channel.reset()
-  
+
   # Invalidate the given key, then replace its value with the given string
   _replace: (key, str) ->
     @_invalidate key
     @_kv.set key, str
-  
+
   # Remove the key or key-pattern from the DB and recursively invalidate its dependent keys
   _invalidate: (pattern) ->
     kill = (key) =>
@@ -144,7 +144,7 @@ class Dispatcher
   _reset_timeout: ->
     @_clear_timeout()
     @_timeout = setTimeout (=> @_idle()), @_idle_timeout
-  
+
   # Add an explicit dependency to `@link`
   _record_dep: (source, key) ->
     (@link[key] ?= []).push source
@@ -238,7 +238,7 @@ class Dispatcher
     return true if @_cycles[key]
     @_cycles[key] = true
     false
-  
+
   # Remove any cycle that includes the given key
   _remove_cycles_containing: (key) ->
     for cycle in _.keys @_cycles

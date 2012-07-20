@@ -9,7 +9,7 @@ module.exports = class ControlChannel
     @_pubsub = db.pub_sub options
     @_queue = db.queue options
     @_channel = _('control').namespace db_index
-  
+
   connect: (callback) ->
     @_pubsub.connect =>
       @_queue.connect callback
@@ -35,5 +35,5 @@ module.exports = class ControlChannel
     @_queue.end()
 
   push_job: (req) ->
-    @_queue.push 'jobs', req
-  
+    @_queue.lpush 'jobs', req
+
