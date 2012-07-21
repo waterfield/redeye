@@ -14,4 +14,7 @@ module.exports = class RedisQueue extends RedisAdapter
   del: (name, callback) ->
     @redis.del name, callback
   range: (name, from, to, callback) ->
-    @redis.lrange name, from, to, callback
+    @redis.lrange name, from, to, (err, arr) ->
+      return callback(err) if err
+      arr = (JSON.parse(str) for str in arr)
+      callback null, arr
