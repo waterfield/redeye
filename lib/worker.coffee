@@ -153,6 +153,7 @@ class Worker
   notify_dep: (key) ->
     msg = ['!dep', @key, key].join consts.key_sep
     @_pubsub.publish @req_channel, msg
+    @got(key) if @got # can be mixed in
 
   # Search for the given keys in the database, then remember them.
   keys: (str) ->
