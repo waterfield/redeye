@@ -17,7 +17,7 @@ class Worker
     [@prefix, @args...] = @key.split consts.arg_sep
     @_pubsub = @queue._worker_pubsub
     @_kv = @queue._worker_kv
-    @_counter = 1
+    @_counters = {}
     @req_channel = _('requests').namespace @queue.options.db_index
     @resp_channel = _('responses').namespace @queue.options.db_index
     @cache = {}
@@ -27,8 +27,9 @@ class Worker
       throw 'no_runner'
     num_workers++
 
-  next_unique_id: ->
-    "#{@key}-#{@_counter++}"
+  next_unique_id: (key=@key) ->
+    @_counters[key] ?= 1
+    "#{key}-#{@_counters[key]++}"
 
   # If we've already seen this `@get` before, then return the actual
   # value we've received (which we know we got because otherwise we

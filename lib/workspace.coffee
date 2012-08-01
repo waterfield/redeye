@@ -2,6 +2,9 @@ _ = require 'underscore'
 Worker = require './worker'
 
 class Workspace
+  workspace: ->
+    Worker.current.workspace
+
   get: (prefix, args...) ->
     # if we provided no arguments, only assume it's a new-style
     # key if the worker defines its parameters
