@@ -45,11 +45,16 @@ class RedeyeTest
   constructor: (test, @exit, @assert) ->
     {setup: @setup, expect: @expect, workers: @workers} = test
     @db_index = ++db_index
-    @db = db @db_index
+    @_kv = db.key_value {@db_index}
+    @_pubsub = db.pub_sub {@db_index}
     @audit = new AuditListener
     @opts = test_mode: true, db_index: @db_index, audit: @audit
     @queue = redeye.queue @opts
     @add_workers()
+  
+  connect: (callback) ->
+    @_kv.connect =>
+      @_pubsub.connect callback
   
   # Add the workers defined by the `workers` key of the test to
   # the WorkQueue we control.
@@ -67,11 +72,13 @@ class RedeyeTest
   #  - Has an emergency timeout that kills the redeye processes
   #  - Waits on `@finish` to be called to complete the test
   run: ->
-    @db.flushdb =>
-      @dispatcher = dispatcher.run @opts
-      @queue.run => @expect.apply this
-      setTimeout (=> @setup.apply this), 100
-      @timeout = setTimeout (=> @die()), 5000
+    @connect =>
+      @_kv.flush =>
+        @dispatcher = dispatcher.run @opts
+        @dispatcher.connect =>
+          @queue.run => @expect.apply this
+          setTimeout (=> (@fiber = Fiber => @setup.apply this).run()), 100
+          @timeout = setTimeout (=> @die()), 5000
 
   # Forcefully quit the test
   die: ->
@@ -82,24 +89,28 @@ class RedeyeTest
   # Terminate the last redis connection, ending the test
   finish: ->
     clearTimeout @timeout
-    @db.end()
+    @_kv.end()
+    @_pubsub.end()
+    delete @fiber
   
   # Send a request to the correct `requests` channel
   request: (args...) ->
     @requested = args.join consts.arg_sep
-    @db.publish _('requests').namespace(@db_index), @requested
+    @_pubsub.publish _('requests').namespace(@db_index), @requested
   
-  # Set a redis value, but first convert to JSON
   set: (args..., value) ->
     key = args.join consts.arg_sep
-    @db.set key, JSON.stringify(value)
+    @_kv.del key, =>
+      @_kv.set key, value, =>
+        @fiber.run()
+    yield()
 
   # Look up and de-jsonify a value from redis
   get: (args..., callback) ->
     key = args.join consts.arg_sep
-    @db.get key, (err, str) ->
+    @_kv.get key, (err, val) ->
       throw err if err
-      callback JSON.parse(str)
+      callback val
 
 # This file exports a method which replaces
 # a whole set of tests. See the comment at the

@@ -5,6 +5,7 @@ RequestChannel = require './request_channel'
 ResponseChannel = require './response_channel'
 _ = require 'underscore'
 require './util'
+db = require './db'
 
 # The dispatcher accepts requests for keys and manages the
 # dependencies between jobs. It ensures that the same work
@@ -22,6 +23,7 @@ class Dispatcher
     @_idle_timeout = options.idle_timeout ? (if @_test_mode then 500 else 10000)
     @_audit_log = new AuditLog stream: options.audit
     {db_index} = options
+    @_kv = db.key_value {db_index}
     @_control_channel = new ControlChannel {db_index}
     @_requests_channel = new RequestChannel {db_index}
     @_responses_channel = new ResponseChannel {db_index}
@@ -30,6 +32,12 @@ class Dispatcher
     @_cycles = {}
     @_seed_count = 0
     @_seeds = {}
+
+  connect: (callback) ->
+    @_kv.connect =>
+      @_control_channel.connect =>
+        @_requests_channel.connect =>
+          @_responses_channel.connect callback
 
   # Subscribe to the `requests` and `responses` channels.
   listen: ->
@@ -41,6 +49,7 @@ class Dispatcher
     @_clear_timeout()
     @_control_channel.quit()
     finish = =>
+      @_kv.end()
       @_control_channel.delete_jobs()
       @_requests_channel.end()
       @_responses_channel.end()
@@ -53,7 +62,10 @@ class Dispatcher
 
   # Set the idle handler
   on_idle: (@_idle_handler) -> this
-  
+
+  # Set the quit handler
+  on_quit: (@_quit_handler) -> this
+
   # Set the quit handler
   on_quit: (@_quit_handler) -> this
 
@@ -75,15 +87,15 @@ class Dispatcher
     else if source == '!dump'
       @_dump_link()
     else if source == '!replace'
-      @_replace keys[0], keys[1..-1].join('|')
+      @_replace keys[0], JSON.parse(keys[1..-1].join('|'))
     else if keys?.length
       @_new_request source, keys
     else
       @_seed source
 
   # Store the current links in the 'deps' key
-  _dump_link: ->
-    @_db().set 'deps', JSON.stringify(@link)
+  _dump_link: (callback) ->
+    @_kv.set 'deps', @link, callback
 
   # The given key is a 'seed' request. In test mode, completion of
   # the seed request signals termination of the workers.
@@ -101,16 +113,16 @@ class Dispatcher
     @deps = {}
     @doc = null
     @_control_channel.reset()
-  
+
   # Invalidate the given key, then replace its value with the given string
   _replace: (key, str) ->
     @_invalidate key
-    @_db().set key, str
-  
+    @_kv.set key, str
+
   # Remove the key or key-pattern from the DB and recursively invalidate its dependent keys
   _invalidate: (pattern) ->
     kill = (key) =>
-      @_db().del key
+      @_kv.del key
       deps = @link[key] ? []
       delete @link[key]
       delete @_state[key]
@@ -118,7 +130,7 @@ class Dispatcher
       @_control_channel.erase key
       kill dep for dep in deps
     if pattern.indexOf('*') >= 0
-      @_db().keys pattern, (e, keys) ->
+      @_kv.keys pattern, (e, keys) ->
         kill key for key in keys
     else
       kill pattern
@@ -135,7 +147,7 @@ class Dispatcher
   _reset_timeout: ->
     @_clear_timeout()
     @_timeout = setTimeout (=> @_idle()), @_idle_timeout
-  
+
   # Add an explicit dependency to `@link`
   _record_dep: (source, key) ->
     (@link[key] ?= []).push source
@@ -169,10 +181,10 @@ class Dispatcher
 
   # The seed request was completed. In test mode, quit the workers.
   _unseed: ->
-    @_dump_link()
-    unless --@_seed_count
-      @_clear_timeout()
-      @quit() if @_single_use
+    @_dump_link =>
+      unless --@_seed_count
+        @_clear_timeout()
+        @quit() if @_single_use
 
   # Called when a key is completed. Any jobs depending on this
   # key are updated, and if they have no more dependencies, are
@@ -219,6 +231,7 @@ class Dispatcher
         return @_fail_recovery() if @_seen_cycle cycle
       for key, deps of @doc.cycle_dependencies()
         @_signal_worker_of_cycles key, deps
+      @_reset_timeout()
     else
       @_fail_recovery()
 
@@ -228,7 +241,7 @@ class Dispatcher
     return true if @_cycles[key]
     @_cycles[key] = true
     false
-  
+
   # Remove any cycle that includes the given key
   _remove_cycles_containing: (key) ->
     for cycle in _.keys @_cycles
@@ -236,11 +249,11 @@ class Dispatcher
 
   # Recovery failed, let the callback know about it.
   _fail_recovery: ->
-    @_stuck_callback?(@doc, @_control_channel.db())
+    @_stuck_callback?(@doc, @_kv)
 
   # Tell the given worker that they have cycle dependencies.
   _signal_worker_of_cycles: (key, deps) ->
-    @_remove_dependencies key, deps
+    # @_remove_dependencies key, deps
     @_control_channel.cycle key, deps
 
   # Remove given dependencies from the key
@@ -251,10 +264,7 @@ class Dispatcher
   # Print a debugging statement
   _debug: (args...) ->
     #console.log 'dispatcher:', args...
-  
-  # Grab a database hook
-  _db: ->
-    @_control_channel.db()
+
 
 module.exports =
 

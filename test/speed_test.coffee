@@ -11,9 +11,10 @@ module.exports = redeye_suite
     workers:
       # 'n' just counts down
       n: (i) ->
-        #console.log i
-        i = parseInt i
-        if i == 1 then 1 else @get_now('n', i-1) + 1
+        if i == '1'
+          1
+        else
+          @get('n', parseInt(i) - 1) + 1
 
     # Request a big job. Record when the request is made.
     setup: ->
@@ -23,7 +24,7 @@ module.exports = redeye_suite
     # Assert that the job didn't take a really long time.
     expect: ->
       dt = new Date().getTime() - @start_time
-      @db.get "n:#{big_num}", (err, str) =>
-        @assert.equal str, ''+big_num
-        @assert.equal true,  (dt < 2000)
+      @get @requested, (val) =>
+        @assert.equal val, big_num
+        @assert.equal true, (dt < 10000)
         @finish()

@@ -1,15 +1,20 @@
 consts = require './consts'
-db = require './db'
 _ = require 'underscore'
 require './util'
+db = require './db'
 
 module.exports = class ControlChannel
   constructor: (options) ->
     {db_index} = options
-    @_db = db db_index
+    @_pubsub = db.pub_sub options
+    @_queue = db.queue options
     @_channel = _('control').namespace db_index
 
-  publish: (msg) -> @_db.publish @_channel, msg
+  connect: (callback) ->
+    @_pubsub.connect =>
+      @_queue.connect callback
+
+  publish: (msg) -> @_pubsub.publish @_channel, msg
 
   cycle: (key, deps) ->
     msg = ['cycle', key, deps...].join consts.key_sep
@@ -23,10 +28,12 @@ module.exports = class ControlChannel
 
   erase: (key) -> @publish "erase#{consts.key_sep}#{key}"
 
-  delete_jobs: -> @_db.del 'jobs'
+  delete_jobs: -> @_queue.del 'jobs'
 
-  end: -> @_db.end()
+  end: ->
+    @_pubsub.end()
+    @_queue.end()
 
-  push_job: (req) -> @_db.rpush 'jobs', req
-  
-  db: -> @_db
+  push_job: (req) ->
+    @_queue.lpush 'jobs', req
+

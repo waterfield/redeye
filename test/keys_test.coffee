@@ -14,7 +14,9 @@ module.exports = redeye_suite
         
     # Set the 'x:*' keys, then request a sum
     setup: ->
-      @db.mset 'x:1', '1', 'x:2', 2, 'x:3', 5
+      @_kv.set 'x:1', 1
+      @_kv.set 'x:2', 2
+      @_kv.set 'x:3', 5
       @request 'a'
 
     # Assert that the doctor ran, and that it detected

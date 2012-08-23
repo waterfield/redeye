@@ -6,13 +6,16 @@ require './util'
 module.exports = class RequestChannel
   constructor: (options) ->
     {db_index} = options
-    @_db = db db_index
+    @_pubsub = db.pub_sub options
     @_channel = _('requests').namespace db_index
 
-  end: -> @_db.end()
+  end: -> @_pubsub.end()
+  
+  connect: (callback) ->
+    @_pubsub.connect callback
 
   listen: (callback) ->
-    @_db.on 'message', (ch, str) ->
+    @_pubsub.message (ch, str) ->
       [source, keys...] = str.split consts.key_sep
       callback source, keys
-    @_db.subscribe @_channel
+    @_pubsub.subscribe @_channel

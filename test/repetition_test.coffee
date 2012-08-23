@@ -16,5 +16,5 @@ module.exports = redeye_suite
 
     # Use the auditor to make sure 'b' was only run once.
     expect: ->
-      @assert.eql @audit.messages, ['?a|b|b|b', '!b', '!a']
+      @assert.eql @audit.messages, ['?a|b', '!b', '!a']
       @finish()
