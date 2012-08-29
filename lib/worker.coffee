@@ -197,9 +197,14 @@ class Worker
   # Attempt to run the runner function.
   run: ->
     @fiber = Fiber =>
+      console.log "ENTER (#{@timestamp()}): #{@key}"
       @clear()
       @process()
+      console.log "LEAVE (#{@timestamp()}): #{@key}"
     @fiber.run()
+
+  timestamp: ->
+    new Date().toJSON()
 
   # Reset information about this run, including:
   #
