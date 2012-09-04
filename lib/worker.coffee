@@ -197,10 +197,10 @@ class Worker
   # Attempt to run the runner function.
   run: ->
     @fiber = Fiber =>
-      console.log "ENTER (#{@timestamp()}): #{@key}"
+      # console.log "ENTER (#{@timestamp()}): #{@key}"
       @clear()
       @process()
-      console.log "LEAVE (#{@timestamp()}): #{@key}"
+      # console.log "LEAVE (#{@timestamp()}): #{@key}"
     @fiber.run()
 
   timestamp: ->

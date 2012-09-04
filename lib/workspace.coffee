@@ -12,7 +12,7 @@ class Workspace
     obj = args[0]
     queue = Worker.current.queue
     obj = {} if (!args.length) && queue.params_for(prefix)
-    if (typeof(obj) == 'object') && !('str' of obj || 'as' of obj || 'sticky' of obj)
+    if obj && (typeof(obj) == 'object') && !('str' of obj || 'as' of obj || 'sticky' of obj)
       unless params = queue.params_for prefix
         throw new Error "No parameters defined for '#{prefix}'"
       root = Worker.current.workspace
