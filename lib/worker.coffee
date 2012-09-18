@@ -168,6 +168,7 @@ class Worker
   # If a klass is given, construct a new one; otherwise, just return
   # the raw value.
   build: (value, klass) ->
+    return value unless value?
     klass ?= @wrapper_class
     if klass? then @bless(new klass(value)) else value
 
@@ -266,7 +267,7 @@ class Worker
       return @fiber.run()
     @_kv.get_all @requested, (err, vals) =>
       console.log 'fail', @key unless @fiber
-      @fiber.run vals
+      @fiber.run vals if @fiber
 
   cycle: ->
     if @on_cycle
