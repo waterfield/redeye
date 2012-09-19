@@ -19,9 +19,9 @@ class Workspace
       args = for param in params
         if typeof(param) == 'object'
           param
-        else if obj[param]?
+        else if obj.hasOwnProperty param
           obj[param]
-        else if @hasOwnProperty param
+        else if this.hasOwnProperty param
           @[param]
         else if root.hasOwnProperty param
           root[param]

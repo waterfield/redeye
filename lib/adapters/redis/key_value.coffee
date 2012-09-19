@@ -3,7 +3,11 @@ RedisAdapter = require './adapter'
 module.exports = class RedisKeyValue extends RedisAdapter
   get: (key, callback) ->
     @redis.get key, (err, val) ->
-      callback err, (JSON.parse(val) if val)
+      try
+        callback err, (JSON.parse(val) if val)
+      catch e
+        console.log 'failed trying to parse key', key, ':', val
+        throw e
   get_all: (keys, callback) ->
     @redis.mget keys, (err, arr) ->
       return callback(err) if err
