@@ -1,3 +1,4 @@
 node_modules
 dump.rdb
 lib-cov
+.DS_Store

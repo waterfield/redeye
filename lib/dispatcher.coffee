@@ -24,6 +24,8 @@ class Dispatcher
     @_audit_log = new AuditLog stream: options.audit
     {db_index} = options
     @_kv = db.key_value {db_index}
+    @_kv.flush()
+    @_kv.set "dispatcher", "reporting for duty on slice: #{db_index}"
     @_control_channel = new ControlChannel {db_index}
     @_requests_channel = new RequestChannel {db_index}
     @_responses_channel = new ResponseChannel {db_index}
@@ -223,6 +225,7 @@ class Dispatcher
       @_recover()
     else
       console.log "Hmm, the doctor couldn't find anything amiss..." if @_verbose
+      @_fail_recovery()
 
   # Recover from a stuck process.
   _recover: ->
