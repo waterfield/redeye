@@ -36,31 +36,47 @@ class Worker
   # wouldn't be running again). Otherwise, just mark this dependency
   # and return `undefined`.
   get: (args...) ->
-    if @_all
-      @gets.push args
-      return
+    return @gets.push(args) if @_all
+    { prefix, opts, key } = @_parse_args args
+    @_last_key = key
+    @_check_caches key
+    vals = @_get key
+    val = if @cycling
+      @cycling = false
+      @on_cycle.apply @target()
+    else
+      @build vals[0], @_as(opts, prefix)
+    @cache[key] = val
+    @sticky[key] = val if opts.sticky
+    val
+
+  # Request a key from the database; if it's not fond, request
+  # it from the dispatcher. Resume the fiber only when the value is
+  # found.
+  _get: (key) ->
+    @_kv.get key, (err, val) =>
+      if val
+        @_run [val]
+      else
+        @request_keys [key]
+    @yield()
+
+  # Parse the @get arguments into the prefix, key arguments,
+  # and options.
+  _parse_args: (args) ->
     prefix = args[0]
     @on_cycle = _.callback args
     opts = _.opts args
     key = args.join consts.arg_sep
-    @_last_key = key
+    { prefix, opts, key }
+
+  # If we've already requested the key, just return its last known
+  # value. Otherwise, mark the key as a dependency. Even so, return
+  # the value from the sticky cache, if present.
+  _check_caches: (key) ->
+    return saved if saved = @cache[key]
     @notify_dep key
-    if saved = @sticky[key] ? @cache[key]
-      return saved
-    @_kv.get key, (err, val) =>
-      if val
-        @fiber.run [val]
-      else
-        @request_keys [key]
-    vals = @yield()
-    if @cycling
-      @cycling = false
-      val = @on_cycle.apply @target()
-    else
-      val = @build vals[0], @_as(opts, prefix)
-    @cache[key] = val
-    @sticky[key] = val if opts.sticky
-    val
+    return saved if saved = @sticky[key]
 
   # Get multiple keys in parallel, and return them in an array
   all: (hash, fun) ->
@@ -106,7 +122,7 @@ class Worker
       if missing.length
         @request_keys missing
       else
-        @fiber.run()
+        @_run()
     for key in needed
       do (key) =>
         @_kv.exists key, (err, exists) ->
@@ -137,7 +153,7 @@ class Worker
         if missing.length
           @request_keys missing
         else
-          @fiber.run []
+          @_run []
       for val, i in @yield()
         values[missing[i]] = val
     for key, i in keys
@@ -158,8 +174,7 @@ class Worker
 
   # Search for the given keys in the database, then remember them.
   keys: (str) ->
-    @_kv.keys str, (err, arr) =>
-      @fiber.run arr
+    @_kv.keys str, (err, arr) => @_run arr
     @yield()
 
   yield: ->
@@ -169,8 +184,14 @@ class Worker
   # the raw value.
   build: (value, klass) ->
     return value unless value?
+    @_test_for_error value
     klass ?= @wrapper_class
     if klass? then @bless(new klass(value)) else value
+
+  _test_for_error: (value) ->
+    if _.isArray value.error
+      @_error_tail = value.error
+      throw new Error "caused by dependency"
 
   # Extend the given object with the context methods of a worker,
   # in addition to a recursive blessing.
@@ -189,11 +210,14 @@ class Worker
   emit: (args..., value) ->
     @emitted = true
     key = args.join consts.arg_sep
+    @_emit key, value, => @_run()
+    @yield() if @fiber
+
+  _emit: (key, value, callback) ->
     json = value?.toJSON?() ? value
     @_kv.set key, json, =>
       @_pubsub.publish @resp_channel, key
-      @fiber.run() if @fiber
-    @yield() if @fiber
+      callback() if callback
 
   # Attempt to run the runner function.
   run: ->
@@ -202,7 +226,14 @@ class Worker
       @clear()
       @process()
       # console.log "LEAVE (#{@timestamp()}): #{@key}"
-    @fiber.run()
+    @_run()
+
+  # Resume the fiber, catching any errors
+  _run: (args...) ->
+    try
+      @fiber.run args... if @fiber
+    catch e
+      @error e
 
   timestamp: ->
     new Date().toJSON()
@@ -216,9 +247,10 @@ class Worker
 
   # Mark that a fatal exception occurred
   error: (err) ->
-    message = err.stack ? err
-    console.log message
-    @_kv.set 'fatal', message
+    trace = err.stack ? err
+    tail = @_error_tail ? []
+    tail.unshift { trace, @key }
+    @_emit @key, error: tail
 
   # Call the runner. We optionally
   # emit the result of the function (if nothing has been emitted yet).
@@ -236,8 +268,7 @@ class Worker
     @workspace
 
   atomic: (key, value) ->
-    @_kv.atomic_set key, value, (err, real) =>
-      @fiber.run real
+    @_kv.atomic_set key, value, (err, real) => @_run real
     @yield()
 
   # We're done!
@@ -264,15 +295,15 @@ class Worker
     @fiber ?= Fiber => @run()
     if @_skip_get_on_resume
       @_skip_get_on_resume = false
-      return @fiber.run()
+      return @_run()
     @_kv.get_all @requested, (err, vals) =>
       console.log 'fail', @key unless @fiber
-      @fiber.run vals if @fiber
+      @_run(vals)
 
   cycle: ->
     if @on_cycle
       @cycling = true
-      @fiber.run()
+      @_run()
     else
       @fiber = null
     # else

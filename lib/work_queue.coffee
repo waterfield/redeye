@@ -130,7 +130,7 @@ class WorkQueue extends events.EventEmitter
   # Mark that a fatal exception occurred
   error: (err) ->
     message = err.stack ? err
-    console.log message
+    console.log "work_queue caught error:", message
     @_kv.set 'fatal', message
 
   # Print a debugging statement
