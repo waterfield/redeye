@@ -6,7 +6,9 @@ module.exports = redeye_suite
   'error test':
 
     workers:
-      a: -> @get 'b'
+      a: ->
+        @each ->
+          @get 'b'
       b: ->
         @get 'c'
         throw new Error 'asdf'

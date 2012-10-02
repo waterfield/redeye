@@ -118,17 +118,23 @@ class Worker
         needed.push key
     return unless rem = needed.length
     finish = =>
-      @_skip_get_on_resume = true
+      # NOTE: had to comment this out so that on @resume(),
+      # we load the values and test them for errors. But there's
+      # probably a better way of doing that.
+      #
+      # @_skip_get_on_resume = true
+
       if missing.length
         @request_keys missing
       else
-        @_run()
+        @_run []
     for key in needed
       do (key) =>
         @_kv.exists key, (err, exists) ->
           missing.push key unless exists
           finish() unless --rem
-    @yield()
+    for val in @yield()
+      @_test_for_error(val) if val
 
   # Get all requested keys
   _get_all: ->
