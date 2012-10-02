@@ -13,6 +13,7 @@ class WorkQueue extends events.EventEmitter
 
   # Register the 'next' event, and listen for 'resume' messages.
   constructor: (@options) ->
+    {db_index} = options
     @_kv = db.key_value @options
     @_queue = db.queue @options
     @_pubsub = db.pub_sub @options
