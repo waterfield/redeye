@@ -18,8 +18,9 @@ class Worker
     @_pubsub = @queue._worker_pubsub
     @_kv = @queue._worker_kv
     @_counters = {}
-    @req_channel = _('requests').namespace @queue.options.db_index
-    @resp_channel = _('responses').namespace @queue.options.db_index
+    @slice = @queue.options.db_index
+    @req_channel = _('requests').namespace @slice
+    @resp_channel = _('responses').namespace @slice
     @cache = {}
     unless @runner = @queue.runners[@prefix]
       @emit @key, null
@@ -255,7 +256,7 @@ class Worker
   error: (err) ->
     trace = err.stack ? err
     tail = @_error_tail ? []
-    tail.unshift { trace, @key }
+    tail.unshift { trace, @key, @slice }
     @_emit @key, error: tail
 
   # Call the runner. We optionally
