@@ -8,9 +8,9 @@ module.exports = class RedisQueue extends RedisAdapter
   lpush: (name, value, callback) ->
     @redis.lpush name, value, callback
   pop: (name, callback) ->
-    @redis.blpop name, 0, (err, [k, v]) =>
+    @redis.blpop name, 0, (err, value) =>
       return callback(err) if err
-      callback(null, v)
+      callback(null, value[1])
   del: (name, callback) ->
     @redis.del name, callback
   range: (name, from, to, callback) ->
