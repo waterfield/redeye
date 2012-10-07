@@ -47,7 +47,7 @@ Workspace.mixin = (mixins) ->
   extend_workspace mixins
 
 core_methods = {}
-for method in ['emit', 'keys', 'worker', 'bless', 'all', 'each', 'atomic']
+for method in ['emit', 'keys', 'worker', 'bless', 'all', 'each', 'atomic', 'async']
   core_methods[method] = Worker.prototype[method]
 extend_workspace core_methods
 

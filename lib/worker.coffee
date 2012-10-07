@@ -235,10 +235,21 @@ class Worker
       # console.log "LEAVE (#{@timestamp()}): #{@key}"
     @_run()
 
+  # Perform the code block asynchronously, outside the
+  # main fiber. The code block should take a callback
+  # and, when the asynchronous operation is complete,
+  # call it with (error, result). The result is returned
+  # from @async, and the error, if any, is thrown.
+  async: (body) ->
+    body (args...) => @_run(args)
+    [err, result] = @yield()
+    throw err if err
+    result
+
   # Resume the fiber, catching any errors
-  _run: (args...) ->
+  _run: (arg) ->
     try
-      @fiber.run args... if @fiber
+      @fiber.run arg if @fiber
     catch e
       @error e
 
