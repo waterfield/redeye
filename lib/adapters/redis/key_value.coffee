@@ -15,6 +15,8 @@ module.exports = class RedisKeyValue extends RedisAdapter
       callback null, (RedisAdapter.unpack(val) for val in arr)
   keys: (pattern, callback) ->
     @redis.keys pattern, callback
+  setnx: (key, value, callback) ->
+    @redis.setnx key, value, callback
   set: (key, value, callback) ->
     @redis.set key, RedisAdapter.pack(value), (err) ->
       callback err if callback

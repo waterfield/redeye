@@ -4,9 +4,6 @@ db = require './db'
 _ = require './util'
 require 'fibers'
 
-# Counts the number of simultaneous workers.
-num_workers = 0
-
 # The worker class is the context under which runner functions are run.
 class Worker
 
@@ -15,19 +12,18 @@ class Worker
   #     prefix:arg1:arg2:...
   constructor: (@key, @queue, @sticky) ->
     [@prefix, @args...] = @key.split consts.arg_sep
+    @_cycle_timeout = 10000
     @_pubsub = @queue._worker_pubsub
     @_kv = @queue._worker_kv
     @_counters = {}
     @slice = @queue.options.db_index
-    @req_channel = _('requests').namespace @slice
-    @resp_channel = _('responses').namespace @slice
+    @_pubsub = db.pub_sub @queue.options
     @cache = {}
     unless @runner = @queue.runners[@prefix]
       @emit @key, null
       unless @queue._is_input[@prefix]
         console.log "no runner for '#{@prefix}' (#{@key})"
       throw 'no_runner'
-    num_workers++
 
   next_unique_id: (key=@key) ->
     @_counters[key] ?= 1
@@ -45,8 +41,8 @@ class Worker
       @_context_list.push _.clone(@_context)
       return @gets.push(args)
     { prefix, opts, key } = @_parse_args args
-    @_last_key = key
-    @_check_caches key
+    return saved if saved = @cache[key]
+    @notify_dep key
     vals = @_get key
     val = if @cycling
       @cycling = false
@@ -54,19 +50,28 @@ class Worker
     else
       @build vals[0], @_as(opts, prefix)
     @cache[key] = val
-    @sticky[key] = val if opts.sticky
     val
 
   # Request a key from the database; if it's not fond, request
   # it from the dispatcher. Resume the fiber only when the value is
   # found.
   _get: (key) ->
-    @_kv.get key, (err, val) =>
-      if val
-        @_run [val]
-      else
-        @request_keys [key]
+    @_kv.get "info:#{key}", (err, info) =>
+      return @queue.error(err) if err
+      @_queue_job key unless info
+      if info.state == 'ready' || info.state == 'error'
+        @_kv.get key, (err, val) =>
+          @_run [val]
+        return
+      else if info.state == 'working'
+        @queue.watch_for_cycle key
+      @request_keys [key]
     @yield()
+
+  _queue_job: (key) ->
+    @_kv.setnx "info:#{key}", {state: 'queued'}, (err, set) ->
+      return @queue.error(err) if err
+      @_queue.lpush 'jobs', key if set
 
   # Parse the @get arguments into the prefix, key arguments,
   # and options.
@@ -77,41 +82,33 @@ class Worker
     key = args.join consts.arg_sep
     { prefix, opts, key }
 
-  # If we've already requested the key, just return its last known
-  # value. Otherwise, mark the key as a dependency. Even so, return
-  # the value from the sticky cache, if present.
-  _check_caches: (key) ->
-    return saved if saved = @cache[key]
-    @notify_dep key
-    return saved if saved = @sticky[key]
+  # # Get multiple keys in parallel, and return them in an array
+  # all: (hash, fun) ->
+  #   @_all = true
+  #   @gets = []
+  #   @_context_list = []
+  #   @_context = {}
+  #   @_apply_many hash, fun
+  #   @_all = false
+  #   @_get_all()
 
-  # Get multiple keys in parallel, and return them in an array
-  all: (hash, fun) ->
-    @_all = true
-    @gets = []
-    @_context_list = []
-    @_context = {}
-    @_apply_many hash, fun
-    @_all = false
-    @_get_all()
+  # # Request multiple keys in parallel, but don't bother to actually
+  # # collect the results.
+  # each: (hash, fun) ->
+  #   @_all = true
+  #   @_context_list = []
+  #   @_context = {}
+  #   @gets = []
+  #   @_apply_many hash, fun
+  #   @_all = false
+  #   @_ensure_all()
+  #   @gets.length
 
-  # Request multiple keys in parallel, but don't bother to actually
-  # collect the results.
-  each: (hash, fun) ->
-    @_all = true
-    @_context_list = []
-    @_context = {}
-    @gets = []
-    @_apply_many hash, fun
-    @_all = false
-    @_ensure_all()
-    @gets.length
-
-  _apply_many: (hash, fun) ->
-    if fun
-      @with hash, fun
-    else
-      hash.apply @workspace
+  # _apply_many: (hash, fun) ->
+  #   if fun
+  #     @with hash, fun
+  #   else
+  #     hash.apply @workspace
 
   with: (hash, fun) ->
     @_with hash, fun, _.keys(hash)
@@ -127,79 +124,79 @@ class Worker
     else
       fun.apply @workspace
 
-  # Request all given but missing keys
-  _ensure_all: ->
-    opts = _.map @gets, (args) -> _.opts args
-    keys = _.map @gets, (args) -> args.join consts.arg_sep
-    rem = keys.length
-    needed = []
-    missing = []
-    for key in keys
-      unless @sticky[key]? || @cache[key]?
-        needed.push key
-    return unless rem = needed.length
-    finish = =>
-      # NOTE: had to comment this out so that on @resume(),
-      # we load the values and test them for errors. But there's
-      # probably a better way of doing that.
-      #
-      # @_skip_get_on_resume = true
-      if missing.length
-        @request_keys missing
-      else
-        @_run []
-    for key in needed
-      do (key) =>
-        @_kv.exists key, (err, exists) ->
-          missing.push key unless exists
-          finish() unless --rem
-    multi = null
-    for val, i in @yield()
-      try
-        @_test_for_error(val) if val
-      catch err
-        err.context = @_context_list[i]
-        (multi ||= new MultiError @).add err
-    throw multi if multi
+  # # Request all given but missing keys
+  # _ensure_all: ->
+  #   opts = _.map @gets, (args) -> _.opts args
+  #   keys = _.map @gets, (args) -> args.join consts.arg_sep
+  #   rem = keys.length
+  #   needed = []
+  #   missing = []
+  #   for key in keys
+  #     unless @sticky[key]? || @cache[key]?
+  #       needed.push key
+  #   return unless rem = needed.length
+  #   finish = =>
+  #     # NOTE: had to comment this out so that on @resume(),
+  #     # we load the values and test them for errors. But there's
+  #     # probably a better way of doing that.
+  #     #
+  #     # @_skip_get_on_resume = true
+  #     if missing.length
+  #       @request_keys missing
+  #     else
+  #       @_run []
+  #   for key in needed
+  #     do (key) =>
+  #       @_kv.exists key, (err, exists) ->
+  #         missing.push key unless exists
+  #         finish() unless --rem
+  #   multi = null
+  #   for val, i in @yield()
+  #     try
+  #       @_test_for_error(val) if val
+  #     catch err
+  #       err.context = @_context_list[i]
+  #       (multi ||= new MultiError @).add err
+  #   throw multi if multi
 
-  # Get all requested keys
-  _get_all: ->
-    opts = _.map @gets, (args) -> _.opts args
-    keys = _.map @gets, (args) -> args.join consts.arg_sep
-    prefixes = _.map @gets, (args) -> args[0]
-    values = {}
-    needed = []
-    missing = []
-    for key in keys
-      if val = @sticky[key] ? @cache[key]
-        values[key] = val
-      else
-        needed.push key
-    if needed.length
-      @_kv.get_all needed, (err, vals) =>
-        for val, i in vals
-          if val
-            values[needed[i]] = val
-          else
-            missing.push needed[i]
-        if missing.length
-          @request_keys missing
-        else
-          @_run []
-      for val, i in @yield()
-        values[missing[i]] = val
-    multi = null
-    built = for key, i in keys
-      try
-        val = @build values[key], @_as(opts[i], prefixes[i])
-        @cache[key] ?= val
-        @sticky[key] ?= val if opts[i].sticky
-        val
-      catch err
-        err.context = @_context_list[i]
-        (multi ||= new MultiError @).add err
-    throw multi if multi
-    built
+  # # Get all requested keys
+  # _get_all: ->
+  #   opts = _.map @gets, (args) -> _.opts args
+  #   keys = _.map @gets, (args) -> args.join consts.arg_sep
+  #   prefixes = _.map @gets, (args) -> args[0]
+  #   values = {}
+  #   needed = []
+  #   missing = []
+  #   for key in keys
+  #     if val = @sticky[key] ? @cache[key]
+  #       values[key] = val
+  #     else
+  #       needed.push key
+  #   if needed.length
+  #     @_kv.get_all needed, (err, vals) =>
+  #       for val, i in vals
+  #         if val
+  #           values[needed[i]] = val
+  #         else
+  #           missing.push needed[i]
+  #       if missing.length
+  #         @request_keys missing
+  #       else
+  #         @_run []
+  #     for val, i in @yield()
+  #       values[missing[i]] = val
+  #   multi = null
+  #   built = for key, i in keys
+  #     try
+  #       val = @build values[key], @_as(opts[i], prefixes[i])
+  #       @cache[key] ?= val
+  #       @sticky[key] ?= val if opts[i].sticky
+  #       val
+  #     catch err
+  #       err.context = @_context_list[i]
+  #       (multi ||= new MultiError @).add err
+  #   throw multi if multi
+  #   built
 
   _as: (opts, prefix) ->
     opts.as || @queue._as[prefix]
@@ -207,9 +204,9 @@ class Worker
   # Notify the dispatcher of our dependency (regardless of whether we're
   # going to request that key).
   notify_dep: (key) ->
-    msg = ['!dep', @key, key].join consts.key_sep
-    @_pubsub.publish @req_channel, msg
     @queue.log @key, 'redeye:require', source: key, target: @key
+    @_kv.sadd "sources:#{@key}", key
+    @_kv.sadd "targets:#{key}", @key
     @got(key) if @got # can be mixed in
 
   # Search for the given keys in the database, then remember them.
@@ -255,7 +252,8 @@ class Worker
   _emit: (key, value, callback) ->
     json = value?.toJSON?() ? value
     @_kv.set key, json, =>
-      @_pubsub.publish @resp_channel, key
+      state = if value?.error then 'error' else 'ready'
+      @queue.finish_key
       callback() if callback
 
   # Attempt to run the runner function.
@@ -323,11 +321,9 @@ class Worker
   # We're done!
   finish: (result) ->
     Worker.finish_callback?.apply this
-    num_workers--
-    @queue.finish @key
-    @emit @key, (result ? null) unless @emitted
-    # console.log 'finish', @key # XXX
+    @queue.finish_worker @key
     @fiber = null
+    @emit @key, (result ? null) unless @emitted
 
   # Ask the dispatcher to providethe given keys by publishing on the
   # `requests` channel. Then block-wait to be signalled by a response

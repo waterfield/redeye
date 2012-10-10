@@ -14,34 +14,45 @@ class WorkQueue extends events.EventEmitter
 
   # Register the 'next' event, and listen for 'resume' messages.
   constructor: (@options) ->
-    {db_index} = options
+    @_workers = {}
+    @_mixins = {}
+    @_runners = {}
     @_kv = db.key_value @options
-    @_queue = db.queue @options
+    @_in_queue = db.queue @options
+    @_out_queue = db.queue @options
     @_pubsub = db.pub_sub @options
     @_worker_kv = db.key_value @options
     @_worker_pubsub = db.pub_sub @options
-    @workers = {}
-    @runners = {}
-    @sticky = {}
-    @mixins = {}
+    @_control_ns = _('control').namespace(@options.db_index)
     @_worker_count = 0
     @_params = {}
     @_is_input = {}
     @_as = {}
-    @listen()
-    @on 'next', => @next()
+    @_listeners = {}
+    @_triggers = {}
+    @_cycle_timeouts = {}
 
-  connect: (callback) ->
+  _connect: (callback) ->
     @_kv.connect =>
-      @_queue.connect =>
-        @_pubsub.connect =>
-          @_worker_kv.connect =>
-            @_worker_pubsub.connect callback
+      @_in_ueue.connect =>
+        @_out_queue.connect =>
+          @_pubsub.connect =>
+            @_worker_kv.connect =>
+              @_worker_pubsub.connect, =>
+                @_listen()
+                callback?()
 
-  # Subscribe to channels
-  listen: ->
+  # Subscribe to channels and queue events
+  _listen: ->
     @_pubsub.message (channel, msg) => @perform msg
-    @_pubsub.subscribe _('control').namespace(@options.db_index)
+    @_pubsub.subscribe @_control_ns
+    @_watch_queues()
+
+  _watch_queues: ->
+    @_in_queue.pop_any 'dirty', 'jobs', (err, response) =>
+      return @error err if err
+      [type, value] = response
+      @_handle[type] value
 
   # Send a log message over redis pubsub
   log: (key, label, payload) ->
@@ -51,44 +62,15 @@ class WorkQueue extends events.EventEmitter
     payload = msgpack.pack payload
     @_worker_pubsub.publish label, payload
 
-  # React to a control message sent by the dispatcher
+  # React to a control message from another queue.
+  #   ready : key was generated
   perform: (msg) ->
     [action, args...] = msg.split consts.key_sep
-    switch action
-      when 'resume' then @resume args...
-      when 'erase' then @erase args...
-      when 'quit' then @quit()
-      when 'reset' then @reset()
-      when 'cycle' then @cycle_detected args...
-      when 'info' then @dump_info()
-
-  dump_info: ->
-    console.log util.inspect(this, false, null, true)
-
-  # Resume the given worker (if it's one of ours)
-  resume: (key) ->
-    @workers[key]?.resume()
-
-  # Erase the given key from the sticky cache (it was invalidated).
-  erase: (key) ->
-    delete @sticky[key]
-
-  # The dispatcher is telling us the given key is part of a cycle. If it's one
-  # of ours, cause the worker to re-run, but throwing an error from the @get that
-  # caused the cycle. On the plus side, we can assume that all the worker's non-
-  # cycled dependencies have been met now.
-  cycle_detected: (key, dependencies...) ->
-    @workers[key]?.cycle()# dependencies
+    @_handle[action].apply this, args
 
   # Run the work queue, calling the given callback on completion
   run: (@callback) ->
-    @connect => @next()
-
-  # Add a worker to the context
-  worker: (prefix, params..., runner) ->
-    @_params[prefix] = params if params.length
-    @runners[prefix] = runner
-    Workspace.prototype[prefix] = (args...) -> @get prefix, args...
+    @_connect()
 
   # Add an accessor that @gets an input
   input: (prefix, params...) ->
@@ -121,25 +103,82 @@ class WorkQueue extends events.EventEmitter
         @error e unless e == 'no_runner'
       @emit 'next'
 
+  _run: (key) ->
+    try
+      @_worker_count++
+      @_kv.del "sources:#{key}", "targets:#{key}"
+      @_workers[key] = new Worker key, this
+      @_workers[key].run()
+    catch e
+      @error e unless e == 'no_runner'
+
+  listen_for: (deps, key) ->
+    wait = []
+    for dep in deps
+      unless @_readied[key]
+        wait.push dep
+    if wait.length
+      @_triggers[key] = wait.length
+      for dep in wait
+        (@_listeners[dep] ||= []).push key
+    else
+      @_workers[key].resume()
+
+  _handle:
+
+    ready: (key) ->
+      clearTimeout @_cycle_timeouts[key]
+      if keys = @_listeners[key]
+        delete @_listeners[key]
+        for key in keys
+          unless --@_triggers[id]
+            delete @_triggers[id]
+            @_workers[key].resume()
+      else
+        @_readied[key] = true
+
+    jobs: (key) ->
+      @_kv.setnx key, {state: 'working'}, (err, set) ->
+        @_run key if set
+        @_watch_queues()
+
+    dirty: (key) ->
+      @_kv.set "info:#{key}", state: 'dirty'
+      @_kv.smembers "targets:#{key}", (err, targets) =>
+        return @error err if err
+        @_out_queue.lpush_all 'dirty', targets, (err) =>
+          @error err if err
+          @_watch_queues()
+
   # Shut down the redis connection and stop running workers
   quit: ->
     @_kv.end()
-    @_queue.end()
+    @_in_queue.end()
+    @_out_queue.end()
     @_pubsub.end()
     @_worker_kv.end()
     @_worker_pubsub.end()
     @callback?()
 
-  # Clean out the sticky cache
-  reset: ->
-    console.log 'worker resetting'
-    @sticky = {}
-
   # Mark the given worker as finished (release its memory)
-  finish: (key) ->
+  finish_worker: (key) ->
     @log key, 'redeye:finish', {}
     @_worker_count--
-    delete @workers[key]
+    delete @_workers[key]
+
+  finish_key: (key, state) ->
+    @_kv.get "info:#{key}", (err, info) =>
+      return @error err if err
+      if info.state == 'working'
+        @_kv.set "info:#{key}", {state}, (err) ->
+          @error err if err
+          @_pubsub.publish @_control_ns, "ready|#{key}"
+
+  watch_for_cycle: (key) ->
+    @_cycle_timeouts[key] = setTimeout (=> @_check_for_cycle key), @_cycle_timeout
+
+  _check_for_cycle: (key) ->
+    # TODO
 
   # Mark that a fatal exception occurred
   error: (err) ->
@@ -147,9 +186,14 @@ class WorkQueue extends events.EventEmitter
     console.log "work_queue caught error:", message
     @_kv.set 'fatal', message
 
-  # Print a debugging statement
-  debug: (args...) ->
-    #console.log 'queue:', args...
+  # Add a worker to the context
+  worker: (prefix, params..., runner) ->
+    @_params[prefix] = params if params.length
+    @_runners[prefix] = runner
+    Workspace.prototype[prefix] = (args...) -> @get prefix, args...
+
+  params_for: (prefix) ->
+    @_params[prefix]
 
   # Alias for `Worker.mixin`
   mixin: (mixins) ->
