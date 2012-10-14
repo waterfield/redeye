@@ -14,9 +14,11 @@ class WorkQueue extends events.EventEmitter
 
   # Register the 'next' event, and listen for 'resume' messages.
   constructor: (@options) ->
+    @queue_id = @_random_queue_id()
     @_workers = {}
     @_mixins = {}
     @_runners = {}
+    @_job_queues = @options.queues ? ['jobs']
     @_kv = db.key_value @options
     @_in_queue = db.queue @options
     @_out_queue = db.queue @options
@@ -27,19 +29,24 @@ class WorkQueue extends events.EventEmitter
     @_worker_count = 0
     @_params = {}
     @_is_input = {}
+    @_pending = []
+    @_resume_for_key = {}
     @_as = {}
     @_listeners = {}
     @_triggers = {}
     @_cycle_timeouts = {}
+    @_queue_for_key = {}
+
+  _random_queue_id: ->
+    '' + Math.random()
 
   _connect: (callback) ->
     @_kv.connect =>
-      @_in_ueue.connect =>
+      @_in_queue.connect =>
         @_out_queue.connect =>
           @_pubsub.connect =>
             @_worker_kv.connect =>
               @_worker_pubsub.connect, =>
-                @_listen()
                 callback?()
 
   # Subscribe to channels and queue events
@@ -49,10 +56,23 @@ class WorkQueue extends events.EventEmitter
     @_watch_queues()
 
   _watch_queues: ->
-    @_in_queue.pop_any 'dirty', 'jobs', (err, response) =>
+    @_in_queue.pop_any 'dirty', @_job_queues..., (err, response) =>
       return @error err if err
       [type, value] = response
-      @_handle[type] value
+      if type == 'dirty'
+        @_handle_dirty_key value
+      else
+        @_handle_job_key type, value
+
+  # cleanup procedure
+  #   find keys which are done, but which have no targets
+  #     if none, return
+  #     delete them and their state
+  #     get/delete their sources
+  #     remove key from each source's target
+  #   repeat
+  cleanup: ->
+    # TODO
 
   # Send a log message over redis pubsub
   log: (key, label, payload) ->
@@ -70,7 +90,11 @@ class WorkQueue extends events.EventEmitter
 
   # Run the work queue, calling the given callback on completion
   run: (@callback) ->
-    @_connect()
+    @_connect =>
+      @_kv.get '_dirty', (err, val) =>
+        return @error err if err
+        @perform 'dirty' if val
+        @_listen()
 
   # Add an accessor that @gets an input
   input: (prefix, params...) ->
@@ -106,7 +130,6 @@ class WorkQueue extends events.EventEmitter
   _run: (key) ->
     try
       @_worker_count++
-      @_kv.del "sources:#{key}", "targets:#{key}"
       @_workers[key] = new Worker key, this
       @_workers[key].run()
     catch e
@@ -124,7 +147,94 @@ class WorkQueue extends events.EventEmitter
     else
       @_workers[key].resume()
 
+  _multi: ->
+    @_kv.redis.multi()
+
+  # on pop job key
+  #   record which queue for key
+  #   if dirty flag
+  #     enqueue key
+  #   else
+  #     as multi
+  #       set self as owner
+  #       add to set of owned jobs
+  #       when done
+  #         start running job
+  _handle_job_key: (queue, key) ->
+    @_queue_for_key[key] = queue
+    if @_dirty
+      @_enqueue_job queue, key
+    else
+      @_multi()
+        .set('_lock:'+key, @queue_id)
+        .sadd('_active:'+@queue_id, key)
+        .exec (err) =>
+          return @error err if err
+          @_run key
+    @_watch_queues()
+
+  # on pop dirty
+  #   set dirty flag
+  #   delete info key
+  #   look up targets
+  #     push targets to dirty
+  #       reset dirty timeout
+  #       call popper
+  _handle_dirty_key: (key) ->
+    @_dirty = true
+    @_kv.del '_lock:'+key
+    @_kv.smembers '_targets:'+key, (err, targets) =>
+      return @error err if err
+      @_out_queue.rpush_all 'dirty', targets, (err) =>
+        @error err if err
+        @_reset_dirty_timeout()
+        @_watch_queues()
+
+  # on enqueue key
+  #   acquire lock
+  #     if success
+  #       push key to job queue
+  _enqueue_job: (queue, key) ->
+    @_kv.setnx '_lock:'+key, 'queued', (err, set) =>
+      return @error err if err
+      return unless set
+      @_out_queue.lpush queue, key
+
+  # on dirty timeout
+  #   clear dirty flag
+  #   take/clear all pending keys
+  #   get info for pending keys
+  #     for each key
+  #       if missing
+  #         enqueue key
+  #       else
+  #         next tick: call resume function
+  _post_dirty: ->
+    @_dirty = false
+    @_kv.del '_dirty'
+    pending = @_pending
+    @_pending = []
+    keys = _.map pending, (p) -> '_lock:'+p
+    @_kv.mget keys, (err, locks) ->
+      return @error err if err
+      for lock, i in locks
+        f = @_resume_for_key keys[i]
+        delete @_resume_for_key keys[i]
+        if lock
+          process.nextTick f
+        else
+          @_enqueue_job @_queue_for_key[key], key
+
+
+  _reset_dirty_timeout: ->
+    clearTimeout @_dirty_timeout
+    @_dirty_timeout = setTimeout (=> @_post_dirty()), 1000
+
   _handle:
+
+    dirty: ->
+      @_dirty = true
+      @_reset_dirty_timeout()
 
     ready: (key) ->
       clearTimeout @_cycle_timeouts[key]
@@ -166,13 +276,53 @@ class WorkQueue extends events.EventEmitter
     @_worker_count--
     delete @_workers[key]
 
-  finish_key: (key, state) ->
-    @_kv.get "info:#{key}", (err, info) =>
-      return @error err if err
-      if info.state == 'working'
-        @_kv.set "info:#{key}", {state}, (err) ->
-          @error err if err
-          @_pubsub.publish @_control_ns, "ready|#{key}"
+  # on job finished
+  #   if dirty flag
+  #     make key pending, with resume to finish job again
+  #   else
+  #     getset sources for key
+  #       find - and + diffs
+  #       as multi
+  #         for each diff
+  #           apply diff to target sets
+  #         set state to done
+  #         remove from our owned jobs
+  #         on completion
+  #           publish done message
+  finish_key: (key) ->
+    if @_dirty
+      @_resume_for_key[key] = =>
+        @finish_key key
+      @_pending.push key
+    else
+      new_sources = @_workers[key].dependencies
+      @_kv.getset '_sources:'+key, new_sources, (err, old_sources) =>
+        return @error err if err
+        [adds, dels] = @_array_diff old_sources, new_sources
+        m = @_multi()
+        for source in dels
+          m.sdel '_targets:'+source, key
+        for source in adds
+          m.sadd '_targets:'+source, key
+        m.set '_lock:'+key, 'done'
+        m.sdel '_active:'+@queue_id, key
+        m.exec (err) =>
+          return @error err if err
+          @_pubsub.publish @_control_ns, 'ready|'+key
+
+  _array_diff: (a, b) ->
+    a = _.clone(a).sort()
+    b = _.clone(b).sort()
+    add = []
+    del = []
+    while a.length && b.length
+      if a[0] == b[0]
+        a.shift(); b.shift()
+      else if a[0] < b[0]
+        del.push a.shift()
+      else
+        add.push b.shift()
+    [add.concat(b), del.concat(a)]
 
   watch_for_cycle: (key) ->
     @_cycle_timeouts[key] = setTimeout (=> @_check_for_cycle key), @_cycle_timeout
