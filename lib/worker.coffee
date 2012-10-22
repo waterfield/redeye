@@ -32,10 +32,6 @@ class Worker
   log: (label, payload) ->
     @queue.log @key, label, payload
 
-  # If we've already seen this `@get` before, then return the actual
-  # value we've received (which we know we got because otherwise we
-  # wouldn't be running again). Otherwise, just mark this dependency
-  # and return `undefined`.
   get: (args...) ->
     if @_all
       @_context_list.push _.clone(@_context)
@@ -52,24 +48,23 @@ class Worker
     @cache[key] = val
     val
 
-  # Request a key from the database; if it's not fond, request
-  # it from the dispatcher. Resume the fiber only when the value is
-  # found.
   _get: (key) ->
-    @_kv.get "info:#{key}", (err, info) =>
+    @_kv.get '_lock:'+key, (err, lock) =>
       return @queue.error(err) if err
-      @_queue_job key unless info
-      if info.state == 'ready' || info.state == 'error'
+      if lock == 'ready'
         @_kv.get key, (err, val) =>
           @_run [val]
-        return
-      else if info.state == 'working'
-        @queue.watch_for_cycle key
-      @request_keys [key]
+      else
+        @_wait_on [key]
+        @queue.enqueue_job @key, key unless lock
     @yield()
 
+  _wait_on: (deps) ->
+    @_waiting_on = deps
+    @queue.listen_for deps, @key
+
   _queue_job: (key) ->
-    @_kv.setnx "info:#{key}", {state: 'queued'}, (err, set) ->
+    @_kv.setnx '_lock'+key, 'queued', (err, set) ->
       return @queue.error(err) if err
       @_queue.lpush 'jobs', key if set
 
@@ -325,22 +320,8 @@ class Worker
     @fiber = null
     @emit @key, (result ? null) unless @emitted
 
-  # Ask the dispatcher to providethe given keys by publishing on the
-  # `requests` channel. Then block-wait to be signalled by a response
-  # on a resume key. Once we get that response, try again to fetch the
-  # dependencies (which should all be present).
-  request_keys: (keys) ->
-    @requested = keys
-    msg = [@key, keys...].join consts.key_sep
-    @_pubsub.publish @req_channel, msg
-
-  # The dispatcher said to resume, so go look for the missing values again. If
-  # we're resuming from a cycle failure, go grab the key.
   resume: ->
     @fiber ?= Fiber => @run()
-    if @_skip_get_on_resume
-      @_skip_get_on_resume = false
-      return @_run()
     @_kv.get_all @requested, (err, vals) =>
       console.log 'fail', @key unless @fiber
       @_run(vals)

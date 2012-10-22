@@ -3,10 +3,9 @@ Worker = require './worker'
 events = require 'events'
 consts = require './consts'
 db = require './db'
-_ = require 'underscore'
-require './util'
 util = require 'util'
 msgpack = require 'msgpack'
+_ = require './util'
 
 # The `WorkQueue` accepts job requests and starts `Worker` objects
 # to handle them.
@@ -144,6 +143,8 @@ class WorkQueue extends events.EventEmitter
       @_triggers[key] = wait.length
       for dep in wait
         (@_listeners[dep] ||= []).push key
+        clearTimeout @_cycle_timeouts[dep]
+        @_cycle_timeouts[dep] = setTimeout (=> @_check_for_cycle dep), @_cycle_timeout
     else
       @_workers[key].resume()
 
@@ -190,6 +191,10 @@ class WorkQueue extends events.EventEmitter
         @_reset_dirty_timeout()
         @_watch_queues()
 
+  enqueue_job: (worker_key, requested_key) ->
+    queue = @_queue_for_key[worker_key]
+    @_enqueue_job queue, requested_key
+
   # on enqueue key
   #   acquire lock
   #     if success
@@ -224,7 +229,6 @@ class WorkQueue extends events.EventEmitter
           process.nextTick f
         else
           @_enqueue_job @_queue_for_key[key], key
-
 
   _reset_dirty_timeout: ->
     clearTimeout @_dirty_timeout
@@ -323,9 +327,6 @@ class WorkQueue extends events.EventEmitter
       else
         add.push b.shift()
     [add.concat(b), del.concat(a)]
-
-  watch_for_cycle: (key) ->
-    @_cycle_timeouts[key] = setTimeout (=> @_check_for_cycle key), @_cycle_timeout
 
   _check_for_cycle: (key) ->
     # TODO
