@@ -1,7 +1,7 @@
+{DependencyError, MultiError} = require './errors'
 consts = require './consts'
 db = require './db'
-_ = require 'underscore'
-require './util'
+_ = require './util'
 require 'fibers'
 
 # Counts the number of simultaneous workers.
@@ -134,8 +134,13 @@ class Worker
         @_kv.exists key, (err, exists) ->
           missing.push key unless exists
           finish() unless --rem
-    for val in @yield()
-      @_test_for_error(val) if val
+    multi = null
+    for val, i in @yield()
+      try
+        @_test_for_error(val) if val
+      catch err
+        (multi ||= new MultiError).add err, i
+    throw multi if multi
 
   # Get all requested keys
   _get_all: ->
@@ -163,11 +168,17 @@ class Worker
           @_run []
       for val, i in @yield()
         values[missing[i]] = val
-    for key, i in keys
-      val = @build values[key], @_as(opts[i], prefixes[i])
-      @cache[key] ?= val
-      @sticky[key] ?= val if opts[i].sticky
-      val
+    multi = null
+    built = for key, i in keys
+      try
+        val = @build values[key], @_as(opts[i], prefixes[i])
+        @cache[key] ?= val
+        @sticky[key] ?= val if opts[i].sticky
+        val
+      catch err
+        (multi ||= new MultiError).add err, i
+    throw multi if multi
+    built
 
   _as: (opts, prefix) ->
     opts.as || @queue._as[prefix]
@@ -197,8 +208,7 @@ class Worker
 
   _test_for_error: (value) ->
     if _.isArray value.error
-      @_error_tail = value.error
-      throw new Error "caused by dependency"
+      throw new DependencyError value.error
 
   # Extend the given object with the context methods of a worker,
   # in addition to a recursive blessing.
@@ -266,7 +276,7 @@ class Worker
   # Mark that a fatal exception occurred
   error: (err) ->
     trace = err.stack ? err
-    tail = @_error_tail ? []
+    tail = err.get_tail?() ? []
     tail.unshift { trace, @key, @slice }
     @_emit @key, error: tail
 
