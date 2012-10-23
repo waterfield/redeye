@@ -37,7 +37,9 @@ class Worker
   # wouldn't be running again). Otherwise, just mark this dependency
   # and return `undefined`.
   get: (args...) ->
-    return @gets.push(args) if @_all
+    if @_all
+      @_context_list.push _.clone(@_context)
+      return @gets.push(args)
     { prefix, opts, key } = @_parse_args args
     @_last_key = key
     @_check_caches key
@@ -83,6 +85,8 @@ class Worker
   all: (hash, fun) ->
     @_all = true
     @gets = []
+    @_context_list = []
+    @_context = {}
     @_apply_many hash, fun
     @_all = false
     @_get_all()
@@ -91,6 +95,8 @@ class Worker
   # collect the results.
   each: (hash, fun) ->
     @_all = true
+    @_context_list = []
+    @_context = {}
     @gets = []
     @_apply_many hash, fun
     @_all = false
@@ -99,13 +105,17 @@ class Worker
 
   _apply_many: (hash, fun) ->
     if fun
-      for key, array of hash
-        for entry in array
-          @workspace[key] = entry
-          fun.apply @workspace
+      @with hash, fun
     else
       hash.apply @workspace
 
+  with: (hash, fun) ->
+    for key, array of hash
+      for entry in array
+        @_context[key] = entry
+        @workspace[key] = entry
+        fun.apply @workspace
+        delete @_context[key]
 
   # Request all given but missing keys
   _ensure_all: ->
@@ -124,7 +134,6 @@ class Worker
       # probably a better way of doing that.
       #
       # @_skip_get_on_resume = true
-
       if missing.length
         @request_keys missing
       else
@@ -139,7 +148,8 @@ class Worker
       try
         @_test_for_error(val) if val
       catch err
-        (multi ||= new MultiError).add err, i
+        err.context = @_context_list[i]
+        (multi ||= new MultiError).add err
     throw multi if multi
 
   # Get all requested keys
@@ -176,7 +186,8 @@ class Worker
         @sticky[key] ?= val if opts[i].sticky
         val
       catch err
-        (multi ||= new MultiError).add err, i
+        err.context = @_context_list[i]
+        (multi ||= new MultiError).add err
     throw multi if multi
     built
 
@@ -208,7 +219,7 @@ class Worker
 
   _test_for_error: (value) ->
     if _.isArray value.error
-      throw new DependencyError value.error
+      throw new DependencyError @, value.error
 
   # Extend the given object with the context methods of a worker,
   # in addition to a recursive blessing.
@@ -276,9 +287,8 @@ class Worker
   # Mark that a fatal exception occurred
   error: (err) ->
     trace = err.stack ? err
-    tail = err.get_tail?() ? []
-    tail.unshift { trace, @key, @slice }
-    @_emit @key, error: tail
+    error = err.get_tail?() ? [{ trace, @key, @slice }]
+    @_emit @key, { error }
 
   # Call the runner. We optionally
   # emit the result of the function (if nothing has been emitted yet).

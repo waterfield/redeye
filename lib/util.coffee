@@ -30,3 +30,5 @@ _.mixin
       a = arr[0...idx]
       b = arr[idx+1..-1]
       [a..., b...]
+
+module.exports = _
