@@ -4,24 +4,24 @@ module.exports = class RedisKeyValue extends RedisAdapter
   get: (key, callback) ->
     @redis.get key, (err, val) ->
       parsed = try
-        JSON.parse val
+        @unpack val
       catch e
-        console.log 'failed trying to parse key', key, ':', val, 'got error', e # XXX
+        console.log 'failed trying to unpack key', key, ':', val, 'got error', e # XXX
         throw e
       callback err, parsed
   get_all: (keys, callback) ->
     @redis.mget keys, (err, arr) ->
       return callback(err) if err
-      callback null, (JSON.parse(val) for val in arr)
+      callback null, (@unpack(val) for val in arr)
   keys: (pattern, callback) ->
     @redis.keys pattern, callback
   set: (key, value, callback) ->
-    @redis.set key, JSON.stringify(value), (err) ->
+    @redis.set key, @pack(value), (err) ->
       callback err if callback
   exists: (key, callback) ->
     @redis.exists key, callback
   atomic_set: (key, value, callback) ->
-    @redis.setnx key, JSON.stringify(value), (err) =>
+    @redis.setnx key, @pack(value), (err) =>
       return callback(err) if err
       @get key, callback
   map_reduce: (pattern, map, reduce, callback) ->
