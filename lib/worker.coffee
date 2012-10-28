@@ -149,7 +149,7 @@ class Worker
         @_test_for_error(val) if val
       catch err
         err.context = @_context_list[i]
-        (multi ||= new MultiError).add err
+        (multi ||= new MultiError @).add err
     throw multi if multi
 
   # Get all requested keys
@@ -187,7 +187,7 @@ class Worker
         val
       catch err
         err.context = @_context_list[i]
-        (multi ||= new MultiError).add err
+        (multi ||= new MultiError @).add err
     throw multi if multi
     built
 

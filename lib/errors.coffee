@@ -20,7 +20,7 @@ class exports.DependencyError extends Error
     list.join("\n")
 
 class exports.MultiError extends Error
-  constructor: (@errors = []) ->
+  constructor: (@worker, @errors = []) ->
     super
     @message = 'Multiple errors in parallel'
     @name = 'MultiError'
@@ -32,4 +32,11 @@ class exports.MultiError extends Error
   each: (fun) ->
     fun error for error in @errors
 
-  get_tail: -> @errors[0].get_tail()
+  _get_tail: (error) ->
+    tail = error.get_tail?()
+    return tail if tail
+    {key, slice} = @worker
+    trace = error.stack
+    [{ trace, key, slice }]
+
+  get_tail: -> @_get_tail @errors[0]
