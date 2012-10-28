@@ -2,6 +2,17 @@ _ = require 'underscore'
 Worker = require './worker'
 
 class Workspace
+
+  @_anchor: {}
+  @_choose: (w) -> Workspace._anchor.__proto__ = w
+
+  # constructor: ->
+  #   return if (p = @__proto__).meta or p == Workspace.prototype
+  #   list = ((p = p.__proto__) while p.__proto__ != Workspace.prototype)
+  #   meta = (@__proto__.meta = {__proto__: Workspace._anchor})
+  #   meta[n] = f for own n, f of p for p in list.reverse()
+  #   @__proto__.__proto__ = meta
+
   workspace: ->
     Worker.current.workspace
 
