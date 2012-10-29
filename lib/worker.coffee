@@ -64,7 +64,7 @@ class Worker
     @queue.listen_for deps, @key
 
   _queue_job: (key) ->
-    @_kv.setnx '_lock'+key, 'queued', (err, set) ->
+    @_kv.setnx '_lock:'+key, 'queued', (err, set) ->
       return @queue.error(err) if err
       @_queue.lpush 'jobs', key if set
 

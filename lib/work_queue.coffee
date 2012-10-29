@@ -81,7 +81,7 @@ class WorkQueue extends events.EventEmitter
     payload = msgpack.pack payload
     @_worker_pubsub.publish label, payload
 
-  # React to a control message from another queue.
+  # React to a control message.
   #   ready : key was generated
   perform: (msg) ->
     [action, args...] = msg.split consts.key_sep
@@ -89,11 +89,7 @@ class WorkQueue extends events.EventEmitter
 
   # Run the work queue, calling the given callback on completion
   run: (@callback) ->
-    @_connect =>
-      @_kv.get '_dirty', (err, val) =>
-        return @error err if err
-        @perform 'dirty' if val
-        @_listen()
+    @_connect => @_listen()
 
   # Add an accessor that @gets an input
   input: (prefix, params...) ->
