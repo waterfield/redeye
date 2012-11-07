@@ -110,12 +110,18 @@ class Worker
       hash.apply @workspace
 
   with: (hash, fun) ->
-    for key, array of hash
-      for entry in array
-        @_context[key] = entry
-        @workspace[key] = entry
-        fun.apply @workspace
+    @_with hash, fun, _.keys(hash)
+
+  _with: (hash, fun, keys) ->
+    if key = keys.shift()
+      for val in hash[key]
+        @_context[key] = val
+        @workspace[key] = val
+        @_with hash, fun, keys
         delete @_context[key]
+      keys.unshift key
+    else
+      fun.apply @workspace
 
   # Request all given but missing keys
   _ensure_all: ->
