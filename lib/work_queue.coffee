@@ -41,6 +41,11 @@ class WorkQueue extends events.EventEmitter
     @_pubsub.message (channel, msg) => @perform msg
     @_pubsub.subscribe _('control').namespace(@options.db_index)
 
+  # Send a log message over redis pubsub
+  log: (key, label, payload) ->
+    payload.key = key
+    @_worker_pubsub.publish label, JSON.stringify(payload)
+
   # React to a control message sent by the dispatcher
   perform: (msg) ->
     [action, args...] = msg.split consts.key_sep

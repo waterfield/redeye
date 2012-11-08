@@ -32,6 +32,9 @@ class Worker
     @_counters[key] ?= 1
     "#{key}-#{@_counters[key]++}"
 
+  log: (label, payload) ->
+    @queue.log @key, label, payload
+
   # If we've already seen this `@get` before, then return the actual
   # value we've received (which we know we got because otherwise we
   # wouldn't be running again). Otherwise, just mark this dependency
