@@ -134,6 +134,9 @@ class RedeyeTest
         list.push "    #{line}"
     list.join("\n")
 
+  missing_message: (key) ->
+    "Key \"#{key}\" resulted in null\n"
+
   delete_nodes: (val) ->
     if _.isArray val
       for item, i in val
@@ -149,17 +152,44 @@ class RedeyeTest
       @requested
     @get key, (actual) =>
       @finish()
-      if actual.error
+      if !actual?
+        msg = @missing_message key
+        @assert.ok false, msg
+      else if actual.error
         msg = @error_message key, actual.error
         @assert.ok false, msg
       else
         actual = @delete_nodes actual
-        if _.isEqual actual, expected
+        if @is_equal actual, expected
           @assert.ok true
         else
           msg = "Key \"#{key}\" was wrong:\n\n"
           msg = msg + @diff_message(expected, actual)
           @assert.ok false, msg
+
+  # Same as _.isEqual, but adds some tolerance for floats
+  is_equal: (a, b) ->
+    return true if !a && !b
+    return false if !a? || !b?
+    if _.isObject a
+      return false unless _.isObject b
+      for k of a
+        return false unless k of b
+      for k of b
+        return false unless k of a
+      for k of a
+        return false unless @is_equal a[k], b[k]
+    else if _.isArray a
+      return false unless _.isArray b
+      return false unless a.length == b.length
+      for i, a_ in a
+        return false unless @is_equal a_, b[i]
+    else if typeof(a) == 'number'
+      return false unless typeof(b) == 'number'
+      return Math.abs(a-b) < 0.0001
+    else
+      return _.isEqual a, b
+    true
 
   # Terminate the last redis connection, ending the test
   finish: ->

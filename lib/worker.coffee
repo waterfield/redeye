@@ -208,6 +208,7 @@ class Worker
   notify_dep: (key) ->
     msg = ['!dep', @key, key].join consts.key_sep
     @_pubsub.publish @req_channel, msg
+    @queue.log @key, 'redeye:require', source: key, target: @key
     @got(key) if @got # can be mixed in
 
   # Search for the given keys in the database, then remember them.

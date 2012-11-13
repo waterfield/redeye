@@ -6,6 +6,7 @@ db = require './db'
 _ = require 'underscore'
 require './util'
 util = require 'util'
+msgpack = require 'msgpack'
 
 # The `WorkQueue` accepts job requests and starts `Worker` objects
 # to handle them.
@@ -44,7 +45,9 @@ class WorkQueue extends events.EventEmitter
   # Send a log message over redis pubsub
   log: (key, label, payload) ->
     payload.key = key
-    @_worker_pubsub.publish label, JSON.stringify(payload)
+    # payload = JSON.stringify payload
+    payload = msgpack.pack payload
+    @_worker_pubsub.publish label, payload
 
   # React to a control message sent by the dispatcher
   perform: (msg) ->
@@ -107,6 +110,7 @@ class WorkQueue extends events.EventEmitter
         return @error err
       try
         @_worker_count++
+        @log str, 'redeye:start', {}
         @workers[str] = new Worker(str, this, @sticky)
         @workers[str].run()
         # console.log @_worker_count
@@ -130,6 +134,7 @@ class WorkQueue extends events.EventEmitter
 
   # Mark the given worker as finished (release its memory)
   finish: (key) ->
+    @log key, 'redeye:finish', {}
     @_worker_count--
     delete @workers[key]
 
