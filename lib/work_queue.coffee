@@ -26,6 +26,7 @@ class WorkQueue extends events.EventEmitter
     @mixins = {}
     @_worker_count = 0
     @_params = {}
+    @_is_input = {}
     @_as = {}
     @listen()
     @on 'next', => @next()
@@ -93,6 +94,7 @@ class WorkQueue extends events.EventEmitter
     opts = _.opts params
     @_params[prefix] = params
     @_as[prefix] = opts.as
+    @_is_input[prefix] = true
     Workspace.prototype[prefix] = (args...) -> @get prefix, args...
 
   params_for: (prefix) ->

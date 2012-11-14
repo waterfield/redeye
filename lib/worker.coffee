@@ -24,7 +24,8 @@ class Worker
     @cache = {}
     unless @runner = @queue.runners[@prefix]
       @emit @key, null
-      console.log "no runner for '#{@prefix}' (#{@key})"
+      unless @queue._is_input[@prefix]
+        console.log "no runner for '#{@prefix}' (#{@key})"
       throw 'no_runner'
     num_workers++
 
