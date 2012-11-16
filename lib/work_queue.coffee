@@ -45,6 +45,7 @@ class WorkQueue extends events.EventEmitter
 
   # Send a log message over redis pubsub
   log: (key, label, payload) ->
+    return unless label and payload
     payload.key = key
     # payload = JSON.stringify payload
     payload = msgpack.pack payload
