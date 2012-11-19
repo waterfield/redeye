@@ -27,11 +27,11 @@
 # You can see examples in `redeye/test/*_test.coffee`.
 
 # Dependencies.
-dispatcher = require '../../lib/dispatcher'
 redeye = require '../../lib/redeye'
 consts = require '../../lib/consts'
 AuditListener = require './audit_listener'
 db = require '../../lib/db'
+msgpack = require 'msgpack'
 _ = require 'underscore'
 require '../../lib/util'
 
@@ -74,15 +74,12 @@ class RedeyeTest
   run: ->
     @connect =>
       @_kv.flush =>
-        @dispatcher = dispatcher.run @opts
-        @dispatcher.connect =>
-          @queue.run => @expect.apply this
-          setTimeout (=> (@fiber = Fiber => @setup.apply this).run()), 100
-          @timeout = setTimeout (=> @die()), 5000
+        @queue.run => @expect.apply this
+        setTimeout (=> (@fiber = Fiber => @setup.apply this).run()), 100
+        @timeout = setTimeout (=> @die()), 5000
 
   # Forcefully quit the test
   die: ->
-    @dispatcher.quit()
     @finish()
     @assert.ok false, "Timed out, sad panda"
 
@@ -194,6 +191,7 @@ class RedeyeTest
   # Terminate the last redis connection, ending the test
   finish: ->
     clearTimeout @timeout
+    @_pubsub.publish "control_#{@db_index}", 'quit'
     @_kv.end()
     @_pubsub.end()
     delete @fiber
@@ -201,20 +199,23 @@ class RedeyeTest
   # Send a request to the correct `requests` channel
   request: (args...) ->
     @requested = args.join consts.arg_sep
-    @_pubsub.publish _('requests').namespace(@db_index), @requested
+    @_kv.redis.set "lock:#{@requested}", 'queue'
+    @_kv.redis.rpush 'jobs', @requested
 
   set: (args..., value) ->
     key = args.join consts.arg_sep
     @_kv.del key, =>
-      @_kv.set key, value, =>
+      value = msgpack.pack value
+      @_kv.redis.set key, value, =>
         @fiber.run()
     yield()
 
   # Look up and de-jsonify a value from redis
   get: (args..., callback) ->
     key = args.join consts.arg_sep
-    @_kv.get key, (err, val) ->
+    @_kv.redis.get key, (err, val) ->
       throw err if err
+      val = msgpack.unpack val if val
       callback val
 
 # This file exports a method which replaces

@@ -16,10 +16,10 @@ make_client = (options) ->
   {db_index} = options ? {}
   host = options.host ? default_host
   port = options.port ? default_port
-  db = redis.createClient port, host
+  db = redis.createClient port, host, return_buffers: true
   db.on 'error', (err) -> throw err
   db.select db_index if db_index?
   db
 
-# Export the client-maker. 
+# Export the client-maker.
 module.exports = make_client
