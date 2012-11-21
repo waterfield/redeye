@@ -1,3 +1,5 @@
-#! /bin/bash
+#! /bin/sh
 
-bin/expresso -I lib test/*_test.coffee
+CHROOT=$_/../..
+ls test/*_test.coffee |
+xargs -n1 bin/expresso

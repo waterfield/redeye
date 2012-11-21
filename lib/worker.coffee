@@ -1,16 +1,27 @@
-{DependencyError, MultiError} = require './errors'
-consts = require './consts'
+require 'fibers'
 msgpack = require 'msgpack'
 _ = require './util'
-require 'fibers'
+pool = require './pool'
+{ DependencyError, MultiError } = require './errors'
 
+# One worker is constructor for every task coming
+# through the work queue(s). It maintains a local cache
+# of dependency values, a workspace for running the
+# key code, and contains the core API for redeye.
+# It runs worker code in a fiber, yielding the fiber
+# every time asynchronous work (such as waiting for
+# dependencies) must be done.
 class Worker
 
   # Break key into prefix and arguments, and set up worker cache.
-  constructor: (@key, @queue) ->
-    [@prefix, @args...] = @key.split consts.arg_sep
-    @kv = @queue._worker_kv.redis
-    @slice = @queue.options.db_index
+  constructor: (@key, @queue, @old_deps, @manager) ->
+    [@prefix, @args...] = @key.split ':'
+    @workspace = new Worker.Workspace
+    params = @manager.params[@prefix] || []
+    @workspace[param] = @args[i] for param, i in params
+    Worker.clear_callback?.apply this
+    @cache = {}
+    @deps = []
 
   # API METHODS
   # ===========
@@ -22,16 +33,19 @@ class Worker
   # callback with arguments `error` and `value`, where `value`
   # will be the result of the `@async` call.
   async: (body) ->
-    body (err, value) =>
-      @resume err, value
-    @yield()
+    @release_db (err) =>
+      @resume err if err
+      body (err1, value) =>
+        @acquire_db (err2) =>
+          @resume (err1 || err2), value
+      @yield()
 
   # `@log(label, payload)`
   #
-  # Use the `WorkQueue#log` function to log a message for this key.
+  # Use the `Manager#log` function to log a message for this key.
   # The resulting message will include `@key` in the payload.
   log: (label, payload) ->
-    @queue.log @key, label, payload
+    @mananger.log @key, label, payload
 
   # `@get(prefix, args..., opts, callback)`
   #
@@ -41,11 +55,11 @@ class Worker
   # * The key is already in our local `@cache`; its already-built
   #   value is just returned.
   # * The key is available in the database. It is retrieved and built
-  #   into an object if applicable. `WorkQueue#require` is called to
+  #   into an object if applicable. `Manager#require` is called to
   #   indicate this worker's dependency on the key. The built value is
   #   returned.
-  # * The key is not available in the database. `WorkQueue#require` is
-  #   called to indicate the dependency. Then, `WorkQueue#enqueue` is
+  # * The key is not available in the database. `Manager#require` is
+  #   called to indicate the dependency. Then, `Manager#enqueue` is
   #   called with the key to create a new job. Once the work queue is
   #   notified of completion of the key with the `ready` control message,
   #   `@get` will resume.
@@ -64,55 +78,36 @@ class Worker
   #   By extending `Workspace`, the wrapper class has access to the
   #   worker's API methods.
   #
-  # If a callback is provided, it will be called in the event the worker
-  # detects a cycle on the requested key. The callback has access to all
-  # normal API methods.
+  # `@get` can return two kinds of errors:
+  #
+  # * `DependencyError`: the requested key had an error which is being
+  #   bubbled up to this worker
+  # * `CycleError`: making the given request would result in a cycle
+  #
+  # Both kinds of errors can be caught and handled normally.
   get: (args...) ->
     return @defer_get(args) if @in_each
     {prefix, opts, key} = @parse_args args
     return saved if saved = @cache[key]
-    @require key
-    @kv.mget 'lock:'+key, key, (err, arr) =>
-      return @resume err if err
-      [lock, value] = arr
-      lock = lock.toString() if lock
-      value = msgpack.unpack value if value
-      if lock == 'ready'
-        @resume null, [value]
+    @deps.push key
+    @require [key], (err, values) =>
+      if err
+        @resume err
+      else if values[0]
+        @resume null, values
       else
         @wait [key]
-        @queue.enqueue key, @key, lock
-    values = @yield()
-    @on_cycle = null
-    value = if @cycling
-      @cycling = false
-      @on_cycle.apply @workspace
-    else
-      @build values[0], prefix, opts
-    @cache[key] = value
-    value
+    @cache[key] = @build @yield()[0], prefix, opts
 
   # Search for the given keys in the database and return them.
   keys: (pattern) ->
     @async (callback) =>
-      @kv.keys pattern, (err, keys) =>
-        return callback err if err
-        keys = (key.toString() for key in keys)
-        callback null, keys
+      @db.keys pattern, callback
 
   # Atomically set the given key to a value.
   atomic: (key, value) ->
     @async (callback) =>
-      @kv.setnx key, value, callback
-
-  # A cycle was detected on this worker while requesting another key.
-  # If the current request supports cycle recovery, then continue
-  # processing; otherwise, do nothing yet, because some other worker
-  # in the cycle may complete and break the cycle.
-  cycle: ->
-    if @on_cycle
-      @cycling = true
-      @resume()
+      @db.setnx key, value, callback
 
   # `@yield()`
   #
@@ -143,11 +138,21 @@ class Worker
   # Start running the worker for the first time. Sets up the
   # worker fiber, clears the worker, and starts running the
   # worker body. Uses `@resume` so that errors are properly
-  # caught.
+  # caught. Take the result of the worker body as the value
+  # of this key and passing it to `@finish`. If there is no
+  # worker body defined for this (non-input) prefix, throw an
+  # error.
   run: ->
     @fiber = Fiber =>
-      @clear()
-      @process()
+      @acquire_db (err) =>
+        if err
+          throw new Error err
+        else if runner = @manager.runners[@prefix]
+          @finish runner.apply(@workspace, @args)
+        else if @manager.is_input[@prefix]
+          @finish null
+        else
+          throw new Error "No runner for prefix '#{@prefix}'"
     @resume()
 
   # `@with key1: [vals...], key2: [vals...], -> ...`
@@ -186,7 +191,7 @@ class Worker
       for val in hash[key]
         @context[key] = val
         @workspace[key] = val
-        @_with hash, fun, keys
+        @with hash, fun, keys
         delete @context[key]
       keys.unshift key
     else
@@ -232,47 +237,61 @@ class Worker
   # INTERNAL METHODS
   # ================
 
-  # Reset the worker state:
-  #   - clear the cache
-  #   - set up a new execution workspace
-  #   - call the clear callback, if any
-  clear: ->
-    @cache = {}
-    @workspace = new Worker.Workspace
-    if params = @queue._params[@prefix]
-      for param, i in params
-        @workspace[param] = @args[i]
-    Worker.clear_callback?.apply this
+  # Get a database client from the pool, set `@db`, and call back.
+  acquire_db: (callback) ->
+    if @db
+      err = new Error "Tried to acquire db when we already had one"
+      return callback err
+    pool.acquire (err, @db) =>
+      callback err
 
-  # Run the body of the worker, taking its result as the value
-  # of this key and passing it to `@finish`. If there is no
-  # worker body defined for this (non-input) prefix, throw an
-  # error.
-  process: ->
-    if runner = @queue._runners[@prefix]
-      @finish runner.apply(@workspace, @args)
-    else if @queue._is_input[@prefix]
-      @finish null
-    else
-      throw new Error "No runner for prefix '#{prefix}'"
+  # Release our database client back to the pool.
+  release_db: (callback) ->
+    unless @db
+      err = new Error "Tried to release db when we didn't have one"
+      return callback err
+    pool.release @db
+    @db = null
+    callback()
 
   # The worker is done and this is its value. Convert using `toJSON` if present,
   # set the key's value, then tell the queue that the key should be released.
   finish: (value) ->
+    @fiber = null
     value = value?.toJSON?() ? value
     value = msgpack.pack value
-    @kv.set @key, value, (err) =>
-      @queue.finish @key
-    Worker.finish_callback?.apply this
-    @fiber = null
+    @db.set @key, value, =>
+      @fix_source_targets =>
+        @release_db =>
+          @manager.finish @key
+          Worker.finish_callback?.apply this
+
+  # We may have dropped some dependencies; in that case, remove us as a
+  # target from the dropped ones.
+  fix_source_targets: (callback) ->
+    bad_deps = []
+    for dep in @old_deps
+      unless dep in @deps
+        bad_deps.push dep
+    return callback() unless bad_deps.length
+    m = @db.multi()
+    for dep in bad_deps
+      m.srem 'targets:'+dep, @key
+    m.exec callback
 
   # Convert the given error message or object into a value
   # suitable for exception bubbling, then set that error as the
   # result of this key with `@finish`.
   error: (err) ->
-    trace = err.stack ? err
-    error = err.get_tail?() ? [{ trace, @key, @slice }]
-    @finish { error }
+    if err.cycle
+      @release_db (err) =>
+        throw err if err
+        @manager.cycle @key, err
+        @fiber = null
+    else
+      trace = err.stack ? err
+      error = err.get_tail?() ? [{ trace, @key, @slice }]
+      @finish { error }
 
   # Parse the @get arguments into the prefix, key arguments,
   # and options.
@@ -280,26 +299,30 @@ class Worker
     prefix = args[0]
     @on_cycle = _.callback args
     opts = _.opts args
-    key = args.join consts.arg_sep
+    key = args.join ':'
     { prefix, opts, key }
 
   # Inform the work queue of this dependency.
-  require: (key) ->
-    @queue.require key, @key
+  require: (sources, callback) ->
+    @manager.require @queue, sources, @key, callback
 
   # Tell the work queue to resume us when all the given dependencies are ready.
   # Once resumed, look up the value of all the dependencies, and resume with them.
   wait: (deps) ->
-    @waiting_for = deps
-    @queue.wait deps, @key
+    @waiting_for = (new Buffer dep for dep in deps)
+    @release_db (err) =>
+      return @resume err if err
+      @manager.wait deps, @key
 
   # We have resumed after the last `@wait`, so look up the keys we're waiting on
   # and resume the fiber with them.
   stop_waiting: ->
-    @kv.mget @waiting_for, (err, arr) =>
-      @waiting_for = null
-      arr = (msgpack.unpack buf for buf in arr) unless err
-      @resume err, arr
+    @acquire_db (err) =>
+      return @resume err if err
+      @db.mget @waiting_for, (err, arr) =>
+        @waiting_for = null
+        arr = (msgpack.unpack buf for buf in arr) unless err
+        @resume err, arr
 
   # Because we're in an `@each` or `@all` block, don't attempt
   # to get the key yet; instead, just record the context and
@@ -317,7 +340,7 @@ class Worker
   build: (value, prefix, opts) ->
     return value unless value?
     @test_for_error value
-    if wrapper = opts.as || @queue._as[prefix]
+    if wrapper = opts.as || @manager.as[prefix]
       new klass(value)
     else
       value
@@ -339,7 +362,7 @@ class Worker
     @pending = []
     for args, index in @gets
       opts = _.opts args
-      key = args.join consts.arg_sep
+      key = args.join ':'
       prefix = args[0]
       @key_opts[key] = { prefix, opts, index }
       @all_keys.push key
@@ -347,14 +370,13 @@ class Worker
   # From the keys requested by `@all`/`@each`, determine which ones are not already
   # cached locally by the worker, and store them in `@needed`; this array holds alternately
   # the lock name and the key itself, suitable for passing to `redis.mget`.
-  # Also use `WorkQueue.require` to record each dependency.
+  # Also use `Manager.require` to record each dependency.
   find_needed_keys: ->
     @needed = []
     for key in @all_keys
       continue if @cache[key]?
-      @needed_reqs.push 'lock:'+key
-      @needed_reqs.push key
-      @require key
+      @needed.push key
+      @deps.push key
 
   # From the keys in `@needed`, ask the database which are available by finding both the
   # lock state and the value of the key. For any unavailable key, put that key in the `@missing`
@@ -362,19 +384,13 @@ class Worker
   find_missing_keys: ->
     @missing = []
     return unless @needed.length
-    @kv.mget @needed, (err, arr) =>
+    @require @needed, (err, values) =>
       return @resume err if err
-      i = 0
-      while i < arr.length
-        key = @needed[i+1]
-        lock = arr[i++]
-        value = arr[i++]
-        lock = lock.toString() if lock
-        if lock == 'ready'
-          value = msgpack.unpack value
+      for key, index in @needed
+        if value = values[index]
           @pending.push [key, value]
         else
-          @missing.push [key, lock]
+          @missing.push key
       @resume()
     @yield()
 
@@ -384,14 +400,9 @@ class Worker
   # them on the `@pending` list.
   get_missing_keys: ->
     return unless @missing.length
-    keys = []
-    for item in missing
-      [key, lock] = item
-      keys.push key
-      @queue.enqueue key, @key, lock
-    @wait keys
-    for value, i in @yield()
-      @pending.push [keys[i], value]
+    @wait @missing
+    for value, index in @yield()
+      @pending.push [@missing[index], value]
 
   # Keys from redis or from resuming from the queue are present in the `@pending`
   # list. For each, test the value for errors and build the key using its prefix

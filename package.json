@@ -1,10 +1,6 @@
 {
   "name": "redeye",
-  "version": "0.1.0",
-  "engines": {
-    "node": ">=0.6",
-    "npm": "1"
-  },
+  "version": "0.2.0",
   "author": "Nathan Matthews",
   "description": "Fast parallel workers",
   "homepage": "https://github.com/waterfield/redeye",
@@ -12,27 +8,15 @@
     "type": "git",
     "url": "git://github.com/waterfield/redeye.git"
   },
-  "directories": {
-    "docs": "./docs",
-    "lib": "./lib",
-    "test": "./test",
-    "bin": "./bin",
-    "script": "./script"
-  },
   "main": "package.js",
   "dependencies": {
     "coffee-script": "1.2",
     "hiredis": "0.1",
     "redis": "0.7",
-    "expresso": "0.9",
     "underscore": "1.3",
     "fibers": "0.6",
-    "mongodb": "1.0",
-    "msgpack": "0.1"
-  },
-  "scripts": {
-    "start": "node script/server.js",
-    "client": "node script/client.js",
-    "test": "bin/test"
+    "msgpack": "0.1",
+    "node-uuid": "1.4",
+    "generic-pool": "2.0"
   }
 }

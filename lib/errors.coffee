@@ -1,4 +1,4 @@
-class exports.DependencyError extends Error
+class DependencyError extends Error
   constructor: (@worker, @tail) ->
     super
     @message = 'Caused by dependency'
@@ -19,7 +19,7 @@ class exports.DependencyError extends Error
         list.push "    #{line}"
     list.join("\n")
 
-class exports.MultiError extends Error
+class MultiError extends Error
   constructor: (@worker, @errors = []) ->
     super
     @message = 'Multiple errors in parallel'
@@ -40,3 +40,17 @@ class exports.MultiError extends Error
     [{ trace, key, slice }]
 
   get_tail: -> @_get_tail @errors[0]
+
+class CycleError extends Error
+  constructor: (@source, @target) ->
+    super
+    @message = 'Cycle detected'
+    @cycle = [source, target]
+    @name = 'CycleError'
+    Error.captureStackTrace @, @constructor
+
+module.exports = {
+  DependencyError
+  MultiError
+  CycleError
+}

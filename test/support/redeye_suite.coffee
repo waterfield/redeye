@@ -28,8 +28,6 @@
 
 # Dependencies.
 redeye = require '../../lib/redeye'
-consts = require '../../lib/consts'
-AuditListener = require './audit_listener'
 db = require '../../lib/db'
 msgpack = require 'msgpack'
 _ = require 'underscore'
@@ -144,7 +142,7 @@ class RedeyeTest
 
   want: (key_parts..., expected) ->
     key = if key_parts.length
-      key_parts.join consts.arg_sep
+      key_parts.join ':'
     else
       @requested
     @get key, (actual) =>
@@ -198,12 +196,12 @@ class RedeyeTest
 
   # Send a request to the correct `requests` channel
   request: (args...) ->
-    @requested = args.join consts.arg_sep
+    @requested = args.join ':'
     @_kv.redis.set "lock:#{@requested}", 'queue'
     @_kv.redis.rpush 'jobs', @requested
 
   set: (args..., value) ->
-    key = args.join consts.arg_sep
+    key = args.join ':'
     @_kv.del key, =>
       value = msgpack.pack value
       @_kv.redis.set key, value, =>
@@ -212,7 +210,7 @@ class RedeyeTest
 
   # Look up and de-jsonify a value from redis
   get: (args..., callback) ->
-    key = args.join consts.arg_sep
+    key = args.join ':'
     @_kv.redis.get key, (err, val) ->
       throw err if err
       val = msgpack.unpack val if val

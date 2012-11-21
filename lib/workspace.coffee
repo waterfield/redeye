@@ -21,10 +21,10 @@ class Workspace
     # key if the worker defines its parameters
     callback = _.callback args
     obj = args[0]
-    queue = Worker.current.queue
-    obj = {} if (!args.length) && queue.params_for(prefix)
+    manager = Worker.current.manager
+    obj = {} if (!args.length) && manager.params[prefix]
     if obj && (typeof(obj) == 'object') && !('str' of obj || 'as' of obj || 'sticky' of obj)
-      unless params = queue.params_for prefix
+      unless params = manager.params[prefix]
         throw new Error "No parameters defined for '#{prefix}'"
       root = Worker.current.workspace
       args = for param in params
