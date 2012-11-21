@@ -126,7 +126,12 @@ class Worker
   # the last call to `@yield`. If the fiber throws an error, record
   # that error as the result of the worker for this key.
   resume: (err, value) ->
-    return @stop_waiting() if @waiting_for
+    if @dirty
+      @fiber = null
+      return
+    if @waiting_for
+      @stop_waiting()
+      return
     Worker.current = this
     try
       @fiber.run [err, value]
@@ -258,6 +263,7 @@ class Worker
   # set the key's value, then tell the queue that the key should be released.
   finish: (value) ->
     @fiber = null
+    return if @dirty
     value = value?.toJSON?() ? value
     value = msgpack.pack value
     @db.set @key, value, =>

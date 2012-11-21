@@ -18,7 +18,6 @@ class Manager
     @queues = opts.queues ? ['jobs']
     @params = {}
     @is_input = {}
-    @pending = []
     @as = {}
     @listeners = {}
     @task_intervals = []
@@ -146,37 +145,25 @@ class Manager
   dirty: (key) ->
     @is_dirty = true
     @log key, 'redeye:dirty', {}
+    if worker = @workers[key]
+      worker.dirty = true
+      delete @workers[key]
     @db.multi()
       .smembers('targets:'+key)
-      .del('lock:'+key)
-      .del(key)
+      .del(key, 'lock:'+key, 'sources:'+key, 'targets:'+key)
       .exec (err, arr) =>
         return @error err if err
-        @db.rpush 'dirty', arr[0]..., (err) =>
+        keys = arr[0].split ','
+        unless keys.length and arr[0].length
+          return @after_dirty()
+        @db.rpush 'dirty', keys..., (err) =>
           return @error err if err
-          @reset_dirty_timeout()
-          @pop_next()
+          @after_dirty()
 
   after_dirty: ->
-    @is_dirty = false
-    pending = @pending
-    @pending = []
-    locks = 'lock:'+key for key in pending
-    @db.mget locks, (err, locks) =>
-      return @error err if err
-      for lock, i in locks
-        key = keys[i]
-        f = @resume_for_key[key]
-        delete @resume_for_key[key]
-        if lock
-          process.nextTick f
-        else if worker = @workers[key]
-          @require worker.queue, key, null, (err) =>
-            @error err if err
-
-  reset_dirty_timeout: ->
     clearTimeout @dirty_timeout
-    @dirty_timeout = setTimeout (=> @after_dirty()), 1000
+    @dirty_timeout = setTimeout (=> @is_dirty = false), 1000
+    @pop_next()
 
   handle:
 
@@ -199,18 +186,15 @@ class Manager
       @callback?()
 
   finish: (key) ->
-    if @is_dirty
-      @resume_for_key[key] = => @finish key
-      @pending.push key
-    else
-      @log key, 'redeye:finish', {}
-      delete @workers[key]
-      @db.multi()
-        .set('lock:'+key, 'ready')
-        .srem('active:'+@id, key)
-        .exec (err) =>
-          return @error err if err
-          @db.publish 'control', 'ready|'+key
+    throw 'FINISH LOCK ERROR' if @is_dirty
+    @log key, 'redeye:finish', {}
+    delete @workers[key]
+    @db.multi()
+      .set('lock:'+key, 'ready')
+      .srem('active:'+@id, key)
+      .exec (err) =>
+        return @error err if err
+        @db.publish 'control', 'ready|'+key
 
   repeat_task: (name, period, callback) ->
     interval = setInterval (=> @lock_task name, period, callback), period*1100

@@ -2,7 +2,8 @@ Manager = require './lib/manager'
 
 m = new Manager
 
-m.worker 'foo', -> 'repeating ' + @bar()
-m.worker 'bar', -> 'the answer!'
+m.worker 'foo', -> @bar() + @baz()
+m.worker 'bar', -> 'bar'
+m.worker 'baz', -> 'baz'
 
 m.run()
