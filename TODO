@@ -1,0 +1,15 @@
+Todo:
+ ☐ simulator
+ ☐ race conditions
+ ☐ cycle recovery
+ ☐ docs
+ ☐ tooling
+
+Done:
+ ✔ delete old code @done (201211211445)
+ ✔ reorganize/rewrite @done (201211211445)
+ ✔ connection pool @done (201211211445)
+ ✔ write lua for require @done (201211211445)
+ ✔ fix source/target maps @done (201211211445)
+ ✔ rescue the orphans @done (201211211445)
+ ✔ make tests work again @done (201211211445)
