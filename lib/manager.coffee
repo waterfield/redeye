@@ -141,6 +141,7 @@ class Manager
     @is_dirty = true
     @log key, 'redeye:dirty', {}
     if worker = @workers[key]
+      console.log "Set #{key} as dirty" # XXX
       worker.dirty = true
       delete @workers[key]
     @db.multi()

@@ -12,25 +12,27 @@ local queue = ARGV[1]
 local actives = redis.call('keys', 'active:*')
 local hearts = {}
 local keys = {}
-local len = 1
+local len = 0
 local key
 local index
 local str
 
 -- convert 'active:*' to 'heartbeat:*'
 for index, str in ipairs(actives) do
-  hearts[index] = 'heartbeat:'..string.sub(str, 7)
+  hearts[index] = 'heartbeat:'..string.sub(str, 8)
 end
 
 -- find orphaned keys
-local beats = redis.call('mget', unpack(hearts))
-for index, str in ipairs(actives) do
-  if not beats[index] then
-    for _, key in ipairs(redis.call('smembers', str)) do
-      keys[len] = key
-      len = len + 1
+if hearts[1] then
+  local beats = redis.call('mget', unpack(hearts))
+  for index, str in ipairs(actives) do
+    if not beats[index] then
+      for _, key in ipairs(redis.call('smembers', str)) do
+        len = len + 1
+        keys[len] = key
+      end
+      redis.call('del', str)
     end
-    redis.call('del', str)
   end
 end
 

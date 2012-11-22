@@ -1,4 +1,5 @@
 Todo:
+ ☐ re-add the pending thing; trigger it from finish and resume on worker
  ☐ simulator
  ☐ race conditions
  ☐ cycle recovery

@@ -246,6 +246,12 @@ class Worker
     @get_missing_keys()
     @build_all()
 
+  # `@worker()`
+  #
+  # Return the current worker object.
+  worker: ->
+    Worker.current
+
   # INTERNAL METHODS
   # ================
 
