@@ -1,5 +1,4 @@
 Todo:
- ☐ take current test.coffee, examine redis log in detail
  ☐ simulator
  ☐ race conditions
  ☐ cycle recovery
@@ -25,3 +24,4 @@ Done:
  ✔ rescue the orphans @done (201211211445)
  ✔ make tests work again @done (201211211445)
  ✔ fix all/each @done (201211211831)
+ ✔ take current test.coffee, examine redis log in detail @done (201211221256)
