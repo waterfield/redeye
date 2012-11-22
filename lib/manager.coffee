@@ -49,7 +49,7 @@ class Manager
       return @error err if err
       if arr.shift().toString() == 'cycle'
         source = arr[0].toString() # NOTE: there may be more!
-        err = new CycleError source, target
+        err = new CycleError [target, source]
         return callback err
       values = for buf in arr
         msgpack.unpack(buf) if buf
@@ -58,13 +58,13 @@ class Manager
       callback null, values
 
   cycle: (key, err) ->
-    # TODO
-    delete @workers[key]
+    msg = 'cycle|' + err.cycle.join('|')
+    @db.publish 'control', msg
+    @remove_worker key, true
 
   log: (key, label, payload) ->
     return unless label and payload
     payload.key = key if key
-    console.log label, payload # XXX
     payload = msgpack.pack payload
     @db.publish label, payload
 
@@ -124,10 +124,10 @@ class Manager
         @error e
       @pop_next()
 
-  resume: (key, dirty) ->
+  resume: (key, dirty, err) ->
     return unless worker = @workers[key]
     worker.dirty = true if dirty
-    worker.resume()
+    worker.resume(err)
 
   handle:
 
@@ -139,16 +139,40 @@ class Manager
       if worker = @workers[key]
         worker.dirty = true
         @db.srem 'active:'+@id, key
-        delete @workers[key]
+        @remove_worker key
       @handle.ready.apply @, [key, true]
+
+    cycle: (cycle...) ->
+      return unless keys = @listeners[cycle[0]]
+      delete @listeners[cycle[0]]
+      m = @db.multi()
+      for key in keys
+        err = new CycleError [key, cycle...]
+        @resume key, false, err
+        m.srem 'sources:'+key, cycle[0]
+      m.exec (err) =>
+        @error err if err
 
     ready: (key, dirty) ->
       return unless keys = @listeners[key]
       delete @listeners[key]
       for key in keys
-        unless --@triggers[key]
+        unless @triggers[key] && (--@triggers[key])
           delete @triggers[key]
           @resume key, dirty
+
+  remove_worker: (key, with_prejudice) ->
+    return unless worker = @workers[key]
+    delete @triggers[key]
+    delete @workers[key]
+    if with_prejudice
+      @db.multi()
+        .del('lock:'+key)
+        .del('sources:'+key)
+        .del('targets:'+key)
+        .srem('active:'+@id, key)
+        .exec (err) =>
+          @error err if err
 
   terminate: ->
     @db.del "heartbeat:#{@id}", =>
@@ -185,7 +209,6 @@ class Manager
   error: (err) ->
     return unless err
     message = err.stack ? err
-    console.log "Manager caught error:", message
     @db.set 'fatal', message
 
 

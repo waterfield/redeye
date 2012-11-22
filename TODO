@@ -1,8 +1,7 @@
 Todo:
- ☐ cycle recovery
- ☐ cycle tests
  ☐ docs
  ☐ tooling
+ ☐ garbage collector
  ☐ simulator
  ☐ race conditions
 
@@ -23,3 +22,5 @@ Done:
  ✔ fix all/each @done (201211211831)
  ✔ take current test.coffee, examine redis log in detail @done (201211221256)
  ✔ test require script for cycle returns @done (201211221328)
+ ✔ cycle recovery @done (201211221425)
+ ✔ cycle tests @done (201211221425)

@@ -34,9 +34,8 @@ class Worker
   async: (body) ->
     @release_db (err) =>
       @resume err if err
-      body (err1, value) =>
-        @acquire_db (err2) =>
-          @resume (err1 || err2), value
+      body (err, value) =>
+        @resume err, value
       @yield()
 
   # `@sleep(seconds)`
@@ -130,7 +129,14 @@ class Worker
   # that error as the result of the worker for this key.
   resume: (err, value) ->
     return @implode() if @dirty
-    if @waiting_for
+    if @db
+      @_resume err, value
+    else
+      @acquire_db (err2) =>
+        @_resume (err2 || err), value
+
+  _resume: (err, value) ->
+    if @waiting_for && !err
       @stop_waiting()
       return
     Worker.current = this
@@ -150,15 +156,12 @@ class Worker
   # error.
   run: ->
     @fiber = Fiber =>
-      @acquire_db (err) =>
-        if err
-          throw new Error err
-        else if runner = @manager.runners[@prefix]
-          @finish runner.apply(@workspace, @args)
-        else if @manager.is_input[@prefix]
-          @finish null
-        else
-          throw new Error "No runner for prefix '#{@prefix}'"
+      if runner = @manager.runners[@prefix]
+        @finish runner.apply(@workspace, @args)
+      else if @manager.is_input[@prefix]
+        @finish null
+      else
+        throw new Error "No runner for prefix '#{@prefix}'"
     @resume()
 
   # `@with key1: [vals...], key2: [vals...], -> ...`
@@ -304,10 +307,11 @@ class Worker
   # result of this key with `@finish`.
   error: (err) ->
     if err.cycle
-      @release_db (err) =>
-        throw err if err
+      if err.complete()
+        @finish error: err.tail()
+      else
+        @implode()
         @manager.cycle @key, err
-        @fiber = null
     else
       trace = err.stack ? err
       error = err.get_tail?() ? [{ trace, @key, @slice }]
@@ -337,12 +341,10 @@ class Worker
   # We have resumed after the last `@wait`, so look up the keys we're waiting on
   # and resume the fiber with them.
   stop_waiting: ->
-    @acquire_db (err) =>
-      return @resume err if err
-      @db.mget @waiting_for, (err, arr) =>
-        @waiting_for = null
-        arr = (msgpack.unpack buf for buf in arr) unless err
-        @resume err, arr
+    @db.mget @waiting_for, (err, arr) =>
+      @waiting_for = null
+      arr = (msgpack.unpack buf for buf in arr) unless err
+      @resume err, arr
 
   # Because we're in an `@each` or `@all` block, don't attempt
   # to get the key yet; instead, just record the context and

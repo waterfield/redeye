@@ -40,6 +40,8 @@ end
 for _, key in ipairs(keys) do
   redis.call('sadd', 'pending', key)
   redis.call('lpush', queue, key)
+  local msg = cmsgpack.pack({key=key})
+  redis.call('publish', 'redeye:orphan', msg)
 end
 
 -- return number of orphaned keys

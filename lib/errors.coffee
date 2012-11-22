@@ -5,16 +5,16 @@ class DependencyError extends Error
     @name = 'DependencyError'
     Error.captureStackTrace @, @constructor
     trace = @stack
-    {key, slice} = @worker
-    @tail.unshift { trace, key, slice }
+    { key } = @worker
+    @tail.unshift { trace, key }
 
   get_tail: -> @tail
 
   full_message: (message, context) ->
     list = [message + "\n"]
     for item in @tail
-      { key, slice, trace } = item
-      list.push "In worker: [#{slice}] #{key}"
+      { key, trace } = item
+      list.push "In worker: #{key}"
       for line in trace.split "\n"
         list.push "    #{line}"
     list.join("\n")
@@ -35,19 +35,24 @@ class MultiError extends Error
   _get_tail: (error) ->
     tail = error.get_tail?()
     return tail if tail
-    {key, slice} = @worker
+    { key } = @worker
     trace = error.stack
-    [{ trace, key, slice }]
+    [{ trace, key }]
 
   get_tail: -> @_get_tail @errors[0]
 
 class CycleError extends Error
-  constructor: (@source, @target) ->
+  constructor: (@cycle) ->
     super
-    @message = 'Cycle detected'
-    @cycle = [source, target]
+    @message = @cycle.join(' <- ')
     @name = 'CycleError'
     Error.captureStackTrace @, @constructor
+
+  complete: ->
+    @cycle[0] == @cycle[@cycle.length - 1]
+
+  tail: ->
+    [{ trace: @stack, key: @cycle[0] }]
 
 module.exports = {
   DependencyError
