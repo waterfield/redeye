@@ -1,19 +1,16 @@
 Todo:
- ☐ simulator
- ☐ race conditions
  ☐ cycle recovery
+ ☐ cycle tests
  ☐ docs
  ☐ tooling
+ ☐ simulator
+ ☐ race conditions
 
 Conditions to test
-  a key is marked dirty while doing one of the following
-    something in async, like sleeping
-    requesting another non-dirty long-running key
-    requesting another dirty long-running key
-    a labor-intensive synchronous task that then finishes
   a worker dies with some active sleeping keys
   a worker dies between getting a job and claiming it
   a bunch of workers try to request the same key at the same time
+  the database resets while workers are running
 
 Done:
  ✔ delete old code @done (201211211445)
@@ -25,3 +22,4 @@ Done:
  ✔ make tests work again @done (201211211445)
  ✔ fix all/each @done (201211211831)
  ✔ take current test.coffee, examine redis log in detail @done (201211221256)
+ ✔ test require script for cycle returns @done (201211221328)
