@@ -270,15 +270,18 @@ class Worker
     @db = null
     callback()
 
+  implode: ->
+    # @release_db()
+    @fiber = null
+
   danger: (callback) ->
     if @dirty
-      @fiber = null
+      @manager.release @key
       true
     else if @manager.is_dirty
       @manager.postpone =>
         if @dirty
-          delete @manager.workers[@key]
-          @fiber = null
+          @manager.release @key
         else
           callback()
       true

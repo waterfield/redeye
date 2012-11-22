@@ -138,13 +138,27 @@ class Manager
     return unless worker = @workers[key]
     worker.resume(err, value)
 
+  release: (key) ->
+    console.log "Releasing #{key}" # XXX
+    if worker = @workers[key]
+      delete @workers[key]
+      worker.implode()
+    @db.multi()
+      .srem('active:'+@id, key)
+      .del('lock:'+key)
+      .exec (err) =>
+        @error err if err
+
   dirty: (key) ->
     @is_dirty = true
     @log key, 'redeye:dirty', {}
     if worker = @workers[key]
       console.log "Set #{key} as dirty" # XXX
       worker.dirty = true
-      delete @workers[key]
+      worker.resume()
+      # TODO: i am not 100% sure this worker
+      # won't just live forever... eventually
+      # it *should* call @manager.release...
     @db.multi()
       .smembers('targets:'+key)
       .del(key, 'lock:'+key, 'sources:'+key, 'targets:'+key)

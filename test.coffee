@@ -13,7 +13,11 @@ m.worker 'a', ->
   'a'
 
 m.worker 'b', ->
-  @sleep 10
+  @c()
   'b'
+
+m.worker 'c', ->
+  @sleep 10
+  'c'
 
 m.run()
