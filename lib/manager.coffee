@@ -22,6 +22,7 @@ class Manager
     @listeners = {}
     @task_intervals = []
     @triggers = {}
+    @pending = []
 
   connect: (callback) ->
     scripts.load (err1, @scripts) =>
@@ -158,8 +159,15 @@ class Manager
 
   after_dirty: ->
     clearTimeout @dirty_timeout
-    @dirty_timeout = setTimeout (=> @is_dirty = false), 1000
+    @dirty_timeout = setTimeout (=> @clean()), 1000
     @pop_next()
+
+  clean: ->
+    @is_dirty = false
+    fun() while fun = @pending.pop()
+
+  postpone: (fun) ->
+    @pending.push fun
 
   handle:
 

@@ -130,9 +130,7 @@ class Worker
   # the last call to `@yield`. If the fiber throws an error, record
   # that error as the result of the worker for this key.
   resume: (err, value) ->
-    if @dirty
-      @fiber = null
-      return
+    return if @danger => @resume err, value
     if @waiting_for
       @stop_waiting()
       return
@@ -272,16 +270,32 @@ class Worker
     @db = null
     callback()
 
+  danger: (callback) ->
+    if @dirty
+      @fiber = null
+      true
+    else if @manager.is_dirty
+      @manager.postpone =>
+        if @dirty
+          delete @manager.workers[@key]
+          @fiber = null
+        else
+          callback()
+      true
+    else
+      false
+
   # The worker is done and this is its value. Convert using `toJSON` if present,
   # set the key's value, then tell the queue that the key should be released.
   finish: (value) ->
+    return if @danger => @finish value
     @fiber = null
-    return if @dirty
     value = value?.toJSON?() ? value
     value = msgpack.pack value
     @db.set @key, value, =>
       @fix_source_targets =>
         @release_db =>
+          return if @danger => @acquire_db => @finish value
           @manager.finish @key
           Worker.finish_callback?.apply this
 
