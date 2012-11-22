@@ -1,7 +1,7 @@
 -- require.lua
 --
---   Called by redeye when a target key requires a source key
---   as a dependency. There are four possible outcomes:
+--   Called by redeye when a target key requires source keys
+--   as dependencies. There are four possible outcomes for each:
 --
 --    * the source already exists:
 --        Mark the dependency and return the key value
@@ -15,62 +15,91 @@
 -- Inputs
 --
 --   queue: which work queue to put the source key on
---   source: dependency key which is being requested
 --   target: key which is making request for dependency
+--   sources: dependency keys which are being requested
+--
+-- Outputs
+--
+--   ['ok', value1, value2, ...]
+--   ['cycle', source1, source2, ...]
 local queue  = ARGV[1]
-local source = ARGV[2]
-local target = ARGV[3]
+local target = ARGV[2]
+local values = {'ok'}
+local cycles = {'cycle'}
+local locks = {}
+local ncycles = 0
+local index = 1
 
--- get the value of the source key
-local value = redis.call('get', source)
+while ARGV[index + 2] do
 
--- skip cycle detection if the value is alrady complete
--- or if there is no defined target
-if target and not value then
+  -- get the value and lock for the key, store them for later
+  local source = ARGV[index + 2]
+  local value = redis.call('get', source)
+  local lock = redis.call('get', 'lock:'..source)
+  values[index + 1] = value
+  locks[source] = lock
+  index = index + 1
 
-  -- visited keeps track of which nodes we hit
-  -- stack has a list of nodes to visit next
-  local visited = {}
-  local stack = {source}
-  local len = 1
+  -- skip cycle detection if the value is alrady complete
+  -- or if there is no defined target
+  if target and lock and not value then
 
-  -- visit nodes until none are left
-  while len > 0 do
-    -- take key from stack, mark as visited
-    local key = stack[len]
-    stack[len] = nil
-    len = len - 1
-    visited[key] = true
-    -- for each source of that key
-    local sources = redis.call('smembers', 'sources:'..key)
-    for _, source in ipairs(sources) do
-      -- if we loop back to the requester, indicate a cycle
-      if source == target then
-        return {'cycle'}
-      -- otherwise, visit the source
-      elseif not visited[source] then
-        len = len + 1
-        stack[len] = source
+    -- visited keeps track of which nodes we hit
+    -- stack has a list of nodes to visit next
+    local visited = {}
+    local stack = {source}
+    local len = 1
+
+    -- visit nodes until none are left
+    while len > 0 do
+      -- take key from stack, mark as visited
+      local key = stack[len]
+      stack[len] = nil
+      len = len - 1
+      visited[key] = true
+      -- for each source of that key
+      local deps = redis.call('smembers', 'sources:'..key)
+      for _, dep in ipairs(deps) do
+        -- if we loop back to the requester, indicate a cycle
+        if dep == target then
+          ncycles = ncycles + 1
+          cycles[ncycles + 1] = source
+          len = 0
+          break
+        -- otherwise, visit the source
+        elseif not visited[dep] then
+          len = len + 1
+          stack[len] = dep
+        end
       end
     end
   end
 end
 
--- record the dependency between source and target
-if target then
-  redis.call('sadd', 'sources:'..target, source)
-  redis.call('sadd', 'targets:'..source, target)
+if ncycles > 0 then
+  return cycles
 end
 
--- if the value is already complete, return it
-if value then
-  return {'exists', value}
--- if the key is already being worked on, return
-elseif 0 == redis.call('setnx', 'lock:'..source, 'queued') then
-  return {'locked'}
--- otherwise, enqueue the key as a job
-else
-  redis.call('sadd', 'pending', source)
-  redis.call('lpush', queue, source)
-  return 'pushed'
+index = 1
+while ARGV[index + 2] do
+
+  local source = ARGV[index + 2]
+  local lock = locks[source]
+  index = index + 1
+
+  -- record the dependency between source and target
+  if target then
+    redis.call('sadd', 'sources:'..target, source)
+    redis.call('sadd', 'targets:'..source, target)
+  end
+
+  -- enqueue the job if it is not locked
+  if not lock then
+    redis.call('set', 'lock:'..source, 'queued')
+    redis.call('sadd', 'pending', source)
+    redis.call('lpush', queue, source)
+    locks[source] = true
+  end
 end
+
+return values

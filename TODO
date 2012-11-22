@@ -5,6 +5,16 @@ Todo:
  ☐ docs
  ☐ tooling
 
+Conditions to test
+  a key is marked dirty while doing one of the following
+    something in async, like sleeping
+    requesting another non-dirty long-running key
+    requesting another dirty long-running key
+    a labor-intensive synchronous task that then finishes
+  a worker dies with some active sleeping keys
+  a worker dies between getting a job and claiming it
+  a bunch of workers try to request the same key at the same time
+
 Done:
  ✔ delete old code @done (201211211445)
  ✔ reorganize/rewrite @done (201211211445)

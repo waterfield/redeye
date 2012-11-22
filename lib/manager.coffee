@@ -45,22 +45,19 @@ class Manager
         @job type, value
 
   require: (queue, sources, target, callback) ->
-    m = @db.multi()
-    for source in sources
-      m.evalsha @scripts.require, 0, queue, source, target
-    m.exec (err, arr) =>
+    @db.evalsha @scripts.require, 0, queue, target, sources..., (err, arr) =>
       return @error err if err
-      results = []
-      for pair in arr
-        type = arr[0].toString()
-        if type == 'cycle'
-          err = new CycleError source, target
-          return callback err
-        value = msgpack.unpack(arr[1]) if arr[1]
-        results.push value
+      if arr.shift().toString() == 'cycle'
+        source = arr[0].toString() # NOTE: there may be more!
+        err = new CycleError source, target
+        return callback err
+      console.log { arr }  # XXX
+      values = for buf in arr
+        msgpack.unpack(buf) if buf
+      console.log { values } # XXX
       for source in sources
         @log null, 'redeye:require', { source, target }
-      callback null, results
+      callback null, values
 
   cycle: (key, err) ->
     # TODO

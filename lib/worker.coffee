@@ -188,6 +188,9 @@ class Worker
   with: (hash, fun, keys) ->
     @in_each = true
     unless keys
+      unless fun
+        fun = hash
+        hash = {}
       keys = _.keys(hash)
       @context = {}
       @context_list = []

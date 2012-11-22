@@ -2,8 +2,11 @@ Manager = require './lib/manager'
 
 m = new Manager
 
-m.worker 'foo', -> @bar() + @baz()
+m.worker 'foo', ->
+  @all ->
+    for i in [0..2]
+      @bar()
+
 m.worker 'bar', -> 'bar'
-m.worker 'baz', -> 'baz'
 
 m.run()
