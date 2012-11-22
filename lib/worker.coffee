@@ -4,7 +4,7 @@ _ = require './util'
 pool = require './pool'
 { DependencyError, MultiError } = require './errors'
 
-# One worker is constructor for every task coming
+# One worker is constructed for every task coming
 # through the work queue(s). It maintains a local cache
 # of dependency values, a workspace for running the
 # key code, and contains the core API for redeye.
@@ -30,7 +30,8 @@ class Worker
   # Uses paired `@yield` and `@resume` to perform an asynchronous
   # function outside the worker fiber. The function should call the
   # callback with arguments `error` and `value`, where `value`
-  # will be the result of the `@async` call.
+  # will be the result of the `@async` call. The `error`, if any, will
+  # be thrown from inside the fiber, to produce sensible stack traces.
   async: (body) ->
     @release_db (err) =>
       @resume err if err
@@ -39,6 +40,8 @@ class Worker
       @yield()
 
   # `@sleep(seconds)`
+  #
+  # Pause the fiber for the specified number of seconds.
   sleep: (n) ->
     @async (callback) -> setTimeout callback, n*1000
 
@@ -57,13 +60,12 @@ class Worker
   # * The key is already in our local `@cache`; its already-built
   #   value is just returned.
   # * The key is available in the database. It is retrieved and built
-  #   into an object if applicable. `Manager#require` is called to
-  #   indicate this worker's dependency on the key. The built value is
-  #   returned.
-  # * The key is not available in the database. `Manager#require` is
-  #   called to indicate the dependency. Then, `Manager#enqueue` is
-  #   called with the key to create a new job. Once the work queue is
-  #   notified of completion of the key with the `ready` control message,
+  #   into an object if applicable. The dependency is marked in
+  #   the database, and the built value is returned.
+  # * The key is not available in the database. The dependency is
+  #   recorded and a new job will be enqueued (unless that job is
+  #   already being run somewhere). Once the manager is notitied
+  #   of completion of the key with the `ready` control message,
   #   `@get` will resume.
   #
   # The following options can be provided:
@@ -71,11 +73,10 @@ class Worker
   # * `as`: if provided, should be a class. The raw value of the key
   #   will be passed to its constructor. A common pattern for this is:
   #
-  #    class Wrapper extends Workspace
-  #
-  #      constructor: (raw) ->
-  #        super()
-  #        _.extend @, raw
+  #      class Wrapper extends Workspace
+  #        constructor: (raw) ->
+  #          super()
+  #          _.extend @, raw
   #
   #   By extending `Workspace`, the wrapper class has access to the
   #   worker's API methods.
@@ -86,7 +87,14 @@ class Worker
   #   bubbled up to this worker
   # * `CycleError`: making the given request would result in a cycle
   #
-  # Both kinds of errors can be caught and handled normally.
+  # Both kinds of errors can be caught and handled normally. Dependency
+  # errors are stored as the result of this key, and include a full backtrace
+  # through all workers' stacks.
+  #
+  # A cycle error, if not caught, is propagated to the next worker up
+  # the dependency chain, to see if that worker can catch it. If no worker
+  # can catch it, the last worker will store the cycle error as a normal
+  # dependency error, which can be propagated normally in a stack trace.
   get: (args...) ->
     return @defer_get(args) if @in_each
     {prefix, opts, key} = @parse_args args
@@ -101,11 +109,15 @@ class Worker
         @wait [key]
     @cache[key] = @build @yield()[0], prefix, opts
 
+  # `@keys(key_pattern)`
+  #
   # Search for the given keys in the database and return them.
   keys: (pattern) ->
     @async (callback) =>
       @db.keys pattern, callback
 
+  # `@atomic(key, value)
+  #
   # Atomically set the given key to a value.
   atomic: (key, value) ->
     @async (callback) =>
@@ -115,7 +127,8 @@ class Worker
   #
   # Suspend the worker fiber until `@resume` is called. If `@resume`
   # is called with an error, throw that error on resume; otherwise,
-  # `@yield` will return the value passed to `@resume`.
+  # `@yield` will return the value passed to `@resume`. The error is
+  # thrown from inside the fiber in order to create sensible stack traces.
   yield: ->
     [ err, value ] = yield()
     throw err if err
@@ -129,21 +142,15 @@ class Worker
   # that error as the result of the worker for this key.
   resume: (err, value) ->
     return @implode() if @dirty
-    if @db
-      @_resume err, value
-    else
-      @acquire_db (err2) =>
-        @_resume (err2 || err), value
-
-  _resume: (err, value) ->
-    if @waiting_for && !err
-      @stop_waiting()
-      return
-    Worker.current = this
-    try
-      @fiber.run [err, value]
-    catch e
-      @error e
+    @try_acquire_db (err2) =>
+      if @waiting_for && !err
+        @stop_waiting()
+        return
+      Worker.current = this
+      try
+        @fiber.run [err || err2, value]
+      catch e
+        @error e
 
   # `@run()`
   #
@@ -184,7 +191,7 @@ class Worker
   # context like so:
   #
   #     # @worker 'foo', 'id', -> ...
-  #     @with id: [1,2], -> @foo()
+  #     @with id: [1,2], @foo
   #
   # which would first `@get('foo', 1)` and then `@get('foo', 2)`.
   #
@@ -272,6 +279,15 @@ class Worker
     @db = null
     callback?()
 
+  # Acquire a database connection, but don't panic if we already have one.
+  try_acquire_db: (callback) ->
+    if @db
+      callback()
+    else
+      @acquire_db callback
+
+  # Release our database connection and null out the fiber so that this
+  # worker object can be garbage collected.
   implode: ->
     @release_db() if @db
     @fiber = null
@@ -326,11 +342,11 @@ class Worker
     key = args.join ':'
     { prefix, opts, key }
 
-  # Inform the work queue of this dependency.
+  # Inform the manager of this dependency.
   require: (sources, callback) ->
     @manager.require @queue, sources, @key, callback
 
-  # Tell the work queue to resume us when all the given dependencies are ready.
+  # Tell the manager to resume us when all the given dependencies are ready.
   # Once resumed, look up the value of all the dependencies, and resume with them.
   wait: (deps) ->
     @waiting_for = (new Buffer dep for dep in deps)
