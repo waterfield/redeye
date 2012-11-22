@@ -1,5 +1,5 @@
 Todo:
- ☐ re-add the pending thing; trigger it from finish and resume on worker
+ ☐ take current test.coffee, examine redis log in detail
  ☐ simulator
  ☐ race conditions
  ☐ cycle recovery

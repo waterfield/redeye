@@ -155,10 +155,7 @@ class Manager
     if worker = @workers[key]
       console.log "Set #{key} as dirty" # XXX
       worker.dirty = true
-      worker.resume()
-      # TODO: i am not 100% sure this worker
-      # won't just live forever... eventually
-      # it *should* call @manager.release...
+    @handle.ready.apply @, [key]
     @db.multi()
       .smembers('targets:'+key)
       .del(key, 'lock:'+key, 'sources:'+key, 'targets:'+key)
