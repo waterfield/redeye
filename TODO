@@ -1,5 +1,4 @@
 Todo:
- ☐ docs
  ☐ tooling
  ☐ garbage collector
  ☐ simulator
@@ -24,3 +23,4 @@ Done:
  ✔ test require script for cycle returns @done (201211221328)
  ✔ cycle recovery @done (201211221425)
  ✔ cycle tests @done (201211221425)
+ ✔ docs @done (201211221515)

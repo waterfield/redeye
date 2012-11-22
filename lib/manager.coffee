@@ -8,6 +8,7 @@ util = require 'util'
 scripts = require './scripts'
 _ = require './util'
 
+# The manager creates and handles `Worker` objects.
 class Manager
 
   constructor: (opts={}) ->
@@ -17,33 +18,56 @@ class Manager
     @runners = {}
     @queues = opts.queues ? ['jobs']
     @params = {}
-    @is_input = {}
     @as = {}
     @listeners = {}
-    @task_intervals = []
     @triggers = {}
+    @task_intervals = []
 
-  connect: (callback) ->
-    scripts.load (err1, @scripts) =>
-      pool.acquire (err2, @pop) =>
-        pool.acquire (err3, @sub) =>
-          pool.acquire (err4, @db) =>
-            callback?(err1 || err2 || err3 || err4)
+  # API METHODS
+  # ===========
 
-  listen: ->
-    @sub.on 'message', (channel, msg) => @perform msg
-    @sub.subscribe 'control'
-    @pop_next()
+  # Start running the manager. When the manager exits,
+  # the callback, if provided, will be called.
+  run: (@callback) ->
+    @connect =>
+      @repeat_task 'orphan', 10, => @check_for_orphans()
+      @heartbeat()
+      @listen()
 
-  pop_next: ->
-    @pop.blpop @queues..., 0, (err, response) =>
-      return @error err if err
-      [type, value] = response
-      @job type, value
+  # Add a worker declaration to this manager. Declarations look like this:
+  #
+  #     m.worker 'prefix', 'param1', 'param2', (arg1, arg2) -> body...
+  #
+  # The parameters or arguments are optional. It is recommended that
+  # you provide parameters. In this case, rather than using arguemnts,
+  # the parameters are converted into instance variables (`@param` etc.)
+  # for you in the context of the workspace.
+  #
+  # By registering the worker, you also create a workspace API method
+  # of the same name as the worker prefix, which is a shortcut for
+  # `@get(prefix, ...)`.
+  worker: (prefix, params..., runner) ->
+    @params[prefix] = params if params.length
+    @runners[prefix] = runner
+    Workspace.prototype[prefix] = (args...) -> @get prefix, args...
 
+  # Mix-in some external methods into the Workspace API.
+  mixin: (mixins) ->
+    Workspace.mixin mixins
+
+  # WORKER-API METHODS
+  # ==================
+
+  # Log that a dependency is being removed (because on a re-run of a dirty
+  # key, a prior dependency was dropped).
   unrequire: (source, target) ->
     @log null, 'redeye:unrequire', { source, target }
 
+  # The given target key is requesting these sources. Use `request.lua` to
+  # try to satisfy these dependencies. If the script indicates a cycle, insert
+  # a cycle error into the requesting worker's lifecycle. Otherwise, return
+  # the value(s) returned by the script, knowing that some of them may be
+  # `null`, so the worker will then call `@wait` on us.
   require: (queue, sources, target, callback) ->
     @db.evalsha @scripts.require, 0, queue, target, sources..., (err, arr) =>
       return @error err if err
@@ -57,51 +81,80 @@ class Manager
         @log null, 'redeye:require', { source, target }
       callback null, values
 
+  # Called by a worker when it has failed to recover from a cycle error.
+  # Propagate that error and remove the worker with prejudice.
   cycle: (key, err) ->
     msg = 'cycle|' + err.cycle.join('|')
     @db.publish 'control', msg
     @remove_worker key, true
 
+  # Log a message. Each message type has its own channel.
   log: (key, label, payload) ->
     return unless label and payload
     payload.key = key if key
     payload = msgpack.pack payload
     @db.publish label, payload
 
-  perform: (msg) ->
-    [action, args...] = msg.toString().split '|'
-    @handle[action].apply this, args
-
-  run: (@callback) ->
-    @connect =>
-      @repeat_task 'orphan', 10, => @check_for_orphans()
-      @heartbeat()
-      @listen()
-
-  heartbeat: ->
-    @db.setex "heartbeat:#{@id}", 10, 1
-    setTimeout (=> @heartbeat()), 5000
-
-  input: (prefix, params...) ->
-    opts = _.opts params
-    @params[prefix] = params
-    @as[prefix] = opts.as
-    @is_input[prefix] = true
-    Workspace.prototype[prefix] = (args...) -> @get prefix, args...
-
-  worker: (prefix, params..., runner) ->
-    @params[prefix] = params if params.length
-    @runners[prefix] = runner
-    Workspace.prototype[prefix] = (args...) -> @get prefix, args...
-
-  mixin: (mixins) ->
-    Workspace.mixin mixins
-
+  # Set up listeners for the given dependencies, such that when all
+  # of them are satisfied, the worker for the key is resumed.
   wait: (deps, key) ->
     @triggers[key] = deps.length
     for dep in deps
       (@listeners[dep] ||= []).push key
 
+  # A worker has finished with the given value, so use `finish.lua` to
+  # attempt to wrap up the worker.
+  finish: (id, key, value, callback) ->
+    @db.evalsha @scripts.finish, 0, id, @id, key, value, (err, set) =>
+      @log(key, 'redeye:finish', {}) if set
+      callback set
+
+  # INTERNAL METHODS
+  # ================
+
+  # Load lua scripts into redis, and acquire our three database connections:
+  #
+  # * `@pop`: used to continually call `blpop` on the work queues
+  # * `@sub`: used to listen for control messages
+  # * `@db`: used for everything else
+  connect: (callback) ->
+    scripts.load (err1, @scripts) =>
+      pool.acquire (err2, @pop) =>
+        pool.acquire (err3, @sub) =>
+          pool.acquire (err4, @db) =>
+            callback?(err1 || err2 || err3 || err4)
+
+  # Start listening on the control channel, calling `@perform` when each
+  # message is received.
+  listen: ->
+    @sub.on 'message', (channel, msg) => @perform msg
+    @sub.subscribe 'control'
+    @pop_next()
+
+  # Pop job message from the work queues and call `@job` to handle it;
+  # some time later `@pop_next` will be called again.
+  pop_next: ->
+    @pop.blpop @queues..., 0, (err, response) =>
+      return @error err if err
+      [type, value] = response
+      @job type, value
+
+  # Dispatch the control message to one of our handlers.
+  perform: (msg) ->
+    [action, args...] = msg.toString().split '|'
+    @handle[action].apply this, args
+
+  # Repeatedly set a heartbeat key in redis, that will expire automatically
+  # if this manager dies for some reason. That way orphans in our active set
+  # can be freed by some later manager and `orphans.lua`.
+  heartbeat: ->
+    @db.setex "heartbeat:#{@id}", 10, 1
+    setTimeout (=> @heartbeat()), 5000
+
+  # We received a key from the work queue; claim that key by putting it into
+  # our working set, changing the key lock to be a unique worker key, and removing
+  # it from the pending set. Also look up then erase the key's sources, so we
+  # can do source-target garbage collection when the key is complete.
   claim: (key, callback) ->
     id = uuid.v1()
     @db.multi()
@@ -115,6 +168,8 @@ class Manager
         deps = if arr[0].length then arr[0].split(',') else []
         callback id, deps
 
+  # First `@claim` the key, then start a worker for the key and tell it to
+  # run. Then, go back and wait for the next job on the work queues.
   job: (queue, key) ->
     @claim key, (id, sources) =>
       try
@@ -124,6 +179,10 @@ class Manager
         @error e
       @pop_next()
 
+  # We want the given worker to resume running, either because its
+  # dependencies have been satisfied, or we want to inject an error
+  # into its fiber, or we want to mark it as dirty and let it implode
+  # from within.
   resume: (key, dirty, err) ->
     return unless worker = @workers[key]
     worker.dirty = true if dirty
@@ -131,10 +190,18 @@ class Manager
 
   handle:
 
+    # We received a quit message, so exit gracefully;
+    #
+    # TODO
     quit: ->
       @quitting = true
       @setTimeout (=> @terminate()), 1000
 
+    # The given key has been marked as dirty by the `dirty.lua` script.
+    # Mark the worker as dirty so that when it resumes, for any reason,
+    # it will implode itself. Then, call `@ready` so that any workers
+    # listening for the given key will mark themselves as dirty and
+    # recursively implode as well.
     dirty: (key) ->
       if worker = @workers[key]
         worker.dirty = true
@@ -142,6 +209,12 @@ class Manager
         @remove_worker key
       @handle.ready.apply @, [key, true]
 
+    # A cycle was detected at some point. If we have any keys listening
+    # as the next node on the cycle, create a new cycle error and let the
+    # worker try to resume. If the worker can't catch the error, it will
+    # call our main `@cycle` method and the error will be propogated around
+    # the cycle. Meanwhile, the listeners should remove the cycle as a
+    # source, in case they do catch the cycle error.
     cycle: (cycle...) ->
       return unless keys = @listeners[cycle[0]]
       delete @listeners[cycle[0]]
@@ -153,6 +226,10 @@ class Manager
       m.exec (err) =>
         @error err if err
 
+    # A key was completed. If we have any listeners for that key,
+    # decrement their trigger count. If they have no remaining listeners,
+    # resume that key. It will then grab its dependency values from
+    # the database and resume work.
     ready: (key, dirty) ->
       return unless keys = @listeners[key]
       delete @listeners[key]
@@ -161,6 +238,10 @@ class Manager
           delete @triggers[key]
           @resume key, dirty
 
+  # Remove the given key from our memory (it is  still up to the worker
+  # to make sure internal references are erased). If the `with_prejudice`
+  # flag is provided, eliminate all trace of the worker from the database
+  # as well. This will happen when a worker fails cycle recovery.
   remove_worker: (key, with_prejudice) ->
     return unless worker = @workers[key]
     delete @triggers[key]
@@ -174,21 +255,24 @@ class Manager
         .exec (err) =>
           @error err if err
 
+  # Gracefully shut down the manager.
+  #
+  # TODO
   terminate: ->
     @db.del "heartbeat:#{@id}", =>
       # TODO: drain the pool
       @clear_tasks()
       @callback?()
 
-  finish: (id, key, value, callback) ->
-    @db.evalsha @scripts.finish, 0, id, @id, key, value, (err, set) =>
-      @log(key, 'redeye:finish', {}) if set
-      callback set
-
+  # Set the given callback as a task to repeat once per period. Since there
+  # may be multiple managers with the same task, make sure a lock is acquired
+  # on the task so that it happens once between every period and 1.1*period.
   repeat_task: (name, period, callback) ->
     interval = setInterval (=> @lock_task name, period, callback), period*1100
     @task_intervals.push interval
 
+  # Attempt to lock the given task; if the lock was acquired, run the callback.
+  # Then expire the task so it can be run again next period.
   lock_task: (name, ttl, callback) ->
     @db.setnx 'task:'+name, 1, (err, set) =>
       return @error err if err
@@ -196,11 +280,15 @@ class Manager
       @db.expire 'task:'+name, ttl
       callback()
 
+  # One of the repeatable tasks. Call the `orphans.lua` script to see if a
+  # worker has died and left orphans. Then brag about it on the console if
+  # we saved any.
   check_for_orphans: ->
     @db.evalsha @scripts.orphans, 0, @queues[0], (err, num) =>
       return @error err if err
       console.log "#{@id} rescued #{num} orphans" if num
 
+  # Stop all repeated tasks by deleting their intervals.
   clear_tasks: ->
     for interval in @task_intervals
       clearInterval interval

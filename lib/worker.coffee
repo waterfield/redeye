@@ -73,10 +73,10 @@ class Worker
   # * `as`: if provided, should be a class. The raw value of the key
   #   will be passed to its constructor. A common pattern for this is:
   #
-  #      class Wrapper extends Workspace
-  #        constructor: (raw) ->
-  #          super()
-  #          _.extend @, raw
+  #         class Wrapper extends Workspace
+  #           constructor: (raw) ->
+  #             super()
+  #             _.extend @, raw
   #
   #   By extending `Workspace`, the wrapper class has access to the
   #   worker's API methods.
@@ -159,14 +159,11 @@ class Worker
   # worker body. Uses `@resume` so that errors are properly
   # caught. Take the result of the worker body as the value
   # of this key and passing it to `@finish`. If there is no
-  # worker body defined for this (non-input) prefix, throw an
-  # error.
+  # worker body defined for this prefix, throw an error.
   run: ->
     @fiber = Fiber =>
       if runner = @manager.runners[@prefix]
         @finish runner.apply(@workspace, @args)
-      else if @manager.is_input[@prefix]
-        @finish null
       else
         throw new Error "No runner for prefix '#{@prefix}'"
     @resume()
