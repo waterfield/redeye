@@ -1,7 +1,7 @@
 fs = require 'fs'
 pool = require './pool'
 
-scripts = ['require', 'refresh', 'orphans']
+scripts = ['require', 'refresh', 'orphans', 'dirty', 'finish']
 shas = {}
 
 load_next_script = (db, callback) ->

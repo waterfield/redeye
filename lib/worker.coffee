@@ -14,12 +14,11 @@ pool = require './pool'
 class Worker
 
   # Break key into prefix and arguments, and set up worker cache.
-  constructor: (@key, @queue, @old_deps, @manager) ->
+  constructor: (@id, @key, @queue, @old_deps, @manager) ->
     [@prefix, @args...] = @key.split ':'
     @workspace = new Worker.Workspace
     params = @manager.params[@prefix] || []
     @workspace[param] = @args[i] for param, i in params
-    Worker.clear_callback?.apply this
     @cache = {}
     @deps = []
 
@@ -130,7 +129,7 @@ class Worker
   # the last call to `@yield`. If the fiber throws an error, record
   # that error as the result of the worker for this key.
   resume: (err, value) ->
-    return if @danger => @resume err, value
+    return @implode() if @dirty
     if @waiting_for
       @stop_waiting()
       return
@@ -268,39 +267,23 @@ class Worker
       return callback err
     pool.release @db
     @db = null
-    callback()
+    callback?()
 
   implode: ->
-    # @release_db()
+    @release_db() if @db
     @fiber = null
-
-  danger: (callback) ->
-    if @dirty
-      @manager.release @key
-      true
-    else if @manager.is_dirty
-      @manager.postpone =>
-        if @dirty
-          @manager.release @key
-        else
-          callback()
-      true
-    else
-      false
 
   # The worker is done and this is its value. Convert using `toJSON` if present,
   # set the key's value, then tell the queue that the key should be released.
   finish: (value) ->
-    return if @danger => @finish value
-    @fiber = null
+    return @implode() if @dirty
     value = value?.toJSON?() ? value
     value = msgpack.pack value
-    @db.set @key, value, =>
-      @fix_source_targets =>
-        @release_db =>
-          return if @danger => @acquire_db => @finish value
-          @manager.finish @key
-          Worker.finish_callback?.apply this
+    @manager.finish @id, @key, value, (ok) =>
+      if ok
+        @fix_source_targets => @implode()
+      else
+        @implode()
 
   # We may have dropped some dependencies; in that case, remove us as a
   # target from the dropped ones.
@@ -313,6 +296,7 @@ class Worker
     m = @db.multi()
     for dep in bad_deps
       m.srem 'targets:'+dep, @key
+      @manager.unrequire dep, @key
     m.exec callback
 
   # Convert the given error message or object into a value
