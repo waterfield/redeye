@@ -421,7 +421,7 @@ class Worker
   build_all: ->
     multi = null
     for item in @pending
-      [key, value] = value
+      [key, value] = item
       { opts, prefix, index } = @key_opts[key]
       try
         @cache[key] = @build value, prefix, opts
