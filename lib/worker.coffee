@@ -40,6 +40,10 @@ class Worker
           @resume (err1 || err2), value
       @yield()
 
+  # `@sleep(seconds)`
+  sleep: (n) ->
+    @async (callback) -> setTimeout callback, n*1000
+
   # `@log(label, payload)`
   #
   # Use the `Manager#log` function to log a message for this key.

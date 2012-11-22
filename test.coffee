@@ -4,9 +4,16 @@ m = new Manager
 
 m.worker 'foo', ->
   @all ->
-    for i in [0..2]
-      @bar()
+    @a()
+    @b()
 
-m.worker 'bar', -> 'bar'
+m.worker 'a', ->
+  @sleep 5
+  @worker().db.rpush 'dirty', 'b'
+  'a'
+
+m.worker 'b', ->
+  @sleep 10
+  'b'
 
 m.run()

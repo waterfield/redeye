@@ -51,10 +51,8 @@ class Manager
         source = arr[0].toString() # NOTE: there may be more!
         err = new CycleError source, target
         return callback err
-      console.log { arr }  # XXX
       values = for buf in arr
         msgpack.unpack(buf) if buf
-      console.log { values } # XXX
       for source in sources
         @log null, 'redeye:require', { source, target }
       callback null, values
