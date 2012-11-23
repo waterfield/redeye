@@ -1,4 +1,5 @@
 Todo:
+ ☐ re-test require.lua
  ☐ tooling
  ☐ garbage collector
  ☐ simulator

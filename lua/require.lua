@@ -22,67 +22,91 @@
 --
 --   ['ok', value1, value2, ...]
 --   ['cycle', source1, source2, ...]
+--
+-- What is going on with this code
+--
+--   Ok so. We're going to do a depth-first search, starting with
+--   the set of source keys. We're going to look for cycles by seeing
+--   if we hit the target key. *But* we're going to stop searching on
+--   any keys that have a value (because they are already done, so
+--   they can't have caused a cycle) or keys without a lock (because
+--   we don't know what their sources are yet). We keep a map of keys
+--   that have been visited so we don't repeat them. Meanwhile, record
+--   the locks and values of the actual source keys. If we come through
+--   without any cycles, we'll need those. The values are sent back
+--   in the response. Any key without a lock needs to be queued as a
+--   job so we do that too.
+
 local queue  = ARGV[1]
 local target = ARGV[2]
 local values = {'ok'}
 local cycles = {'cycle'}
 local locks = {}
 local ncycles = 0
-local index = 1
 
-while ARGV[index + 2] do
-
-  -- get the value and lock for the key, store them for later
-  local source = ARGV[index + 2]
-  local value = redis.call('get', source)
-  local lock = redis.call('get', 'lock:'..source)
-  values[index + 1] = value
-  locks[source] = lock
-  index = index + 1
-
-  -- skip cycle detection if the value is alrady complete
-  -- or if there is no defined target
-  if target and lock and not value then
-
-    -- visited keeps track of which nodes we hit
-    -- stack has a list of nodes to visit next
-    local visited = {}
+-- Don't bother checking for cycles unless the request specified
+-- a target. You'd do that if you were making a seed request or
+-- something.
+if target then
+  -- loop over source keys
+  local index = 1
+  while ARGV[index + 2] do
+    -- initial stack consists of just the source key
+    local source = ARGV[index + 2]
     local stack = {source}
     local len = 1
-
-    -- visit nodes until none are left
+    local visited = {}
+    local first = true
+    -- loop until all keys are visited
     while len > 0 do
-      -- take key from stack, mark as visited
+      -- grab the key's value and lock
       local key = stack[len]
-      stack[len] = nil
       len = len - 1
+      local value = redis.call('get', key)
+      local lock = redis.call('get', 'lock:'..key)
+      -- if this is a source key, record the lock and value
+      if first then
+        locks[index - 1] = lock
+        values[index - 2] = value
+        first = false
+      end
+      -- mark the key visited so we don't repeat it
       visited[key] = true
-      -- for each source of that key
-      local deps = redis.call('smembers', 'sources:'..key)
-      for _, dep in ipairs(deps) do
-        -- if we loop back to the requester, indicate a cycle
-        if dep == target then
-          ncycles = ncycles + 1
-          cycles[ncycles + 1] = source
-          len = 0
-          break
-        -- otherwise, visit the source
-        elseif not visited[dep] then
-          len = len + 1
-          stack[len] = dep
+      -- stop iterating unless a cycle is even possible (see header)
+      if lock and not value then
+        -- loop over the key's dependencies
+        local deps = redis.call('smembers', 'sources:'..key)
+        for _, dep in ipairs(deps) do
+          -- if the dependency is the target, it's a cycle, so
+          -- bump the cycle count and record the source as causing it
+          if dep == target then
+            ncycles = ncycles + 1
+            cycles[ncycles + 1] = source
+            len = 0
+            break
+          -- otherwise, visit the dependency unless we have already
+          else if not visited[dep] then
+            len = len + 1
+            stack[len] = dep
+          end
         end
       end
     end
+    -- move on to the next source
+    index = index + 1
   end
 end
 
+-- if we had any cycles, return them with the 'cycle' status
 if ncycles > 0 then
   return cycles
 end
 
+-- no cycles, so loop through sources again
 index = 1
 while ARGV[index + 2] do
 
+  -- grab next source and its recorded lock
   local source = ARGV[index + 2]
   local lock = locks[source]
   index = index + 1
@@ -102,4 +126,5 @@ while ARGV[index + 2] do
   end
 end
 
+-- return the values, some of which may be nil
 return values
