@@ -1,20 +1,10 @@
-redeye_suite = require './support/redeye_suite'
+test 'atomic', ->
 
-module.exports = redeye_suite 
+  worker 'foo', ->
+    baz = @atomic 'baz', 123
+    bar = @atomic 'bar', 216
+    baz = @atomic 'baz', 666
+    [bar, baz]
 
-  'test atomically setting keys':
-  
-    workers:
-      foo: ->
-        @atomic 'baz', 123
-        bar = @atomic 'bar', 216 # succeeds
-        baz = @atomic 'baz', 666 # fails
-        [bar, baz]
-        
-    setup: ->
-      @request 'foo'
-
-    expect: ->
-      @get @requested, (value) =>
-        @assert.eql value, [216, 123]
-        @finish()
+  setup -> request 'foo'
+  want ['216', '123']

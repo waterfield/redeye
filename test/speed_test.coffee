@@ -1,30 +1,16 @@
-redeye_suite = require './support/redeye_suite'
+# make sure each key takes < 10ms
 
-big_num = 1000
+test 'speed', ->
 
-module.exports = redeye_suite
+  big_num = 1000
 
-  # Tests that a pathological many-step case is still fast
-  # (usually clocks in at < 1ms per iteration. not bad!)
-  'test speed':
-  
-    workers:
-      # 'n' just counts down
-      n: (i) ->
-        if i == '1'
-          1
-        else
-          @get('n', parseInt(i) - 1) + 1
+  worker 'n', (i) -> if i == 1 then 1 else @n(i-1) + 1
 
-    # Request a big job. Record when the request is made.
-    setup: ->
-      @start_time = new Date().getTime()
-      @request 'n', big_num
+  setup ->
+    $.start = new Date().getTime()
+    request 'n', big_num
 
-    # Assert that the job didn't take a really long time.
-    expect: ->
-      dt = new Date().getTime() - @start_time
-      @get @requested, (val) =>
-        @assert.equal val, big_num
-        @assert.equal true, (dt < 10000)
-        @finish()
+  want big_num
+  expect ->
+    dt = new Date().getTime() - $.start
+    assert.that dt < (big_num * 10)

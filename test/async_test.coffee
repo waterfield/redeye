@@ -1,18 +1,8 @@
-redeye_suite = require './support/redeye_suite'
+test 'async', ->
 
-module.exports = redeye_suite
+  worker 'test', ->
+    @async (callback) ->
+      setTimeout (-> callback null, 216), 100
 
-  'async test':
-
-    workers:
-      'test': ->
-        @async (callback) ->
-          setTimeout (-> callback null, 216), 100
-
-    setup: ->
-      @request 'test'
-
-    expect: ->
-      @get 'test', (value) =>
-        @assert.eql value, 216
-        @finish()
+  setup -> request 'test'
+  want 216

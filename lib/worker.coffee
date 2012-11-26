@@ -36,11 +36,9 @@ class Worker
   # will be the result of the `@async` call. The `error`, if any, will
   # be thrown from inside the fiber, to produce sensible stack traces.
   async: (body) ->
-    @release_db (err) =>
-      @resume err if err
-      body (err, value) =>
-        @resume err, value
-      @yield()
+    body (err, value) =>
+      @resume err, value
+    @yield()
 
   # `@sleep(seconds)`
   #
@@ -124,7 +122,12 @@ class Worker
   # Atomically set the given key to a value.
   atomic: (key, value) ->
     @async (callback) =>
-      @db.setnx key, value, callback
+      @db.multi()
+        .setnx(key, value)
+        .get(key)
+        .exec (err, arr) =>
+          value = arr[1] unless err
+          callback err, value
 
   # `@yield()`
   #
@@ -382,7 +385,7 @@ class Worker
     return value unless value?
     @test_for_error value
     if wrapper = opts.as || @manager.as[prefix]
-      new klass(value)
+      new wrapper(value)
     else
       value
 

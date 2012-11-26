@@ -1,3 +1,7 @@
+# Tests that @all / @each work as expected; also tests that
+# the work queue is actually a stack by testing that the terminal
+# key is called in reverse order from the requests.
+
 describe 'multi', ->
 
   worker '_all', -> @all -> @x(1); @x(2); @x(3)

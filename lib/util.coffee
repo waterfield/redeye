@@ -22,6 +22,10 @@ _.mixin
     else
       null
 
+  sum: (list, f) ->
+    add = (m, x) -> m + (f?(x) ? x ? 0)
+    _.reduce list, add, 0
+
   without: (arr, elem) ->
     idx = arr.indexOf elem
     if idx < 0

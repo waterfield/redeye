@@ -1,32 +1,20 @@
-_ = require 'underscore'
-redeye_suite = require './support/redeye_suite'
+test 'errors', ->
 
-module.exports = redeye_suite
+  worker 'a', -> @each -> @b()
+  worker 'b', -> @c(); throw new Error 'asdf'
+  worker 'c', -> 216
 
-  'error test':
+  setup -> request 'a'
 
-    workers:
-      a: ->
-        @each ->
-          @get 'b'
-      b: ->
-        @get 'c'
-        throw new Error 'asdf'
-      c: -> 216
-
-    setup: ->
-      @request 'a'
-
-    expect: ->
-      @get 'a', (value) =>
-        list = value.error
-        @assert.ok _.isArray(list)
-        @assert.eql list.length, 2
-        keys = _.pluck list, 'key'
-        traces = _.pluck list, 'trace'
-        @assert.eql keys, ['a', 'b']
-        err1 = traces[0].split("\n")[0]
-        err2 = traces[1].split("\n")[0]
-        @assert.eql err1, "Error: caused by dependency"
-        @assert.eql err2, "Error: asdf"
-        @finish()
+  expect ->
+    value = get 'a'
+    list = value.error
+    assert.that _.isArray(list)
+    assert.equal list.length, 2
+    keys = _.pluck list, 'key'
+    traces = _.pluck list, 'trace'
+    assert.equal keys, ['a', 'b']
+    err1 = traces[0].split("\n")[0]
+    err2 = traces[1].split("\n")[0]
+    assert.equal err1, "DependencyError: Caused by dependency"
+    assert.equal err2, "Error: asdf"

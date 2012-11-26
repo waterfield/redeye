@@ -1,57 +1,22 @@
-redeye_suite = require './support/redeye_suite'
+describe 'cycles', ->
 
-module.exports = redeye_suite 
+  worker 'a', -> @b()
+  worker 'b', -> @c()
+  worker 'c', -> @a()
+  worker 'd', -> 216
 
-  'uncaught cycle test':
-    workers:
-      z: -> @get 'a'
-      a: -> @get 'b'
-      b: -> @get 'c'
-      c: -> 
-        @emit 'q', 666
-        worker = @worker()
-        setTimeout (-> worker.emit 'c', 216), 1500
-        @get 'a'
-    setup: ->
-      @queue.wacky = true
-      @dispatcher.wacky = true
-      @dispatcher.on_stuck (doc) =>
-        @cycle ?= doc.cycles[0]
-      @request 'z'
-    expect: ->
-      @assert.eql @cycle, ['a', 'b', 'c']
-      @finish()
-    
-  'caught cycle test':
-    workers:
-      z: -> @get 'a'
-      a: -> @get 'b'
-      b: ->
-        v = @get 'v'
-        c = @get 'c', -> 123
-        w = @get 'w'
-        v + c + w
-      c: -> @get 'a'
-      v: -> 10
-      w: -> 20
-    setup: ->
-      @request 'z'
-    expect: ->
-      @assert.eql @dispatcher.doc.cycles[0], ['a', 'b', 'c']
-      @_kv.get_all ['a', 'b', 'c'], (e, arr) =>
-        @assert.eql arr, [153, 153, 153]
-        @finish()
-  
-  'redundant recovery':
-        workers:
-          a: -> @get 'b', -> 1
-          b: -> @get 'c', -> 2
-          c: -> @get 'a', -> 3
-          z: -> (@get('a') ? 0) + (@get('b') ? 0) + (@get('c') ? 0)
-        setup: ->
-          @request 'z'
-        expect: ->
-          @get 'z', (val) =>
-            @assert.eql val, 6
-            @finish()
-    
+  test 'uncaught', ->
+    setup -> request 'a'
+    expect ->
+      msg = get('a').error[0].trace.split("\n")[0]
+      assert.equal msg, 'CycleError: a <- b <- c <- a'
+
+  test 'caught', ->
+    worker 'b', ->
+      try
+        @c()
+      catch err
+        @d()
+    setup -> request 'a'
+    want 216
+

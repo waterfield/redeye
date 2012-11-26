@@ -49,7 +49,9 @@ class Manager
   # of the same name as the worker prefix, which is a shortcut for
   # `@get(prefix, ...)`.
   worker: (prefix, params..., runner) ->
+    opts = _.opts params
     @params[prefix] = params if params.length
+    @as[prefix] = opts.as
     @runners[prefix] = runner
     Workspace.prototype[prefix] = (args...) -> @get prefix, args...
 

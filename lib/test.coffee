@@ -107,9 +107,12 @@ get = (args...) ->
 set = (args..., value) ->
   key = args.join ':'
   buf = msgpack.pack value
-  db.set key, value, (err) ->
-    debug 'run from set'
-    fiber.run err
+  db.multi()
+    .set(key, buf)
+    .set('lock:'+key, 'ready')
+    .exec (err) =>
+      debug 'run from set'
+      fiber.run err
   debug 'yield from set'
   err = yield()
   throw err if err
@@ -175,6 +178,11 @@ delete_nodes = (val) ->
   val
 
 assert =
+  that: (bool, msg='nope') ->
+    if bool
+      pass()
+    else
+      fail(msg)
   equal: (a, b, msg='mismatch') ->
     if is_equal a, b
       pass()
@@ -294,8 +302,9 @@ run_setup = ->
   debug 'yield from run_setup'
   yield()
 
-wanted = (expected) ->
-  compare requested, get(requested), expected
+wanted = (args..., expected) ->
+  key = if args.length then args.join(':') else requested
+  compare key, get(key), expected
 
 run_expect = ->
   return if the_test.failed
