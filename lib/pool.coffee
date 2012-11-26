@@ -5,8 +5,8 @@ host = '127.0.0.1'
 opts = detect_buffers: true
 
 module.exports = require('generic-pool').Pool
-  name: 'redis'
   max: 1000
+  # log: true
   create: (callback) ->
     client = redis.createClient port, host, opts
     callback null, client

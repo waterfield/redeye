@@ -85,7 +85,7 @@ if target then
             len = 0
             break
           -- otherwise, visit the dependency unless we have already
-          else if not visited[dep] then
+          elseif not visited[dep] then
             len = len + 1
             stack[len] = dep
           end
@@ -103,7 +103,7 @@ if ncycles > 0 then
 end
 
 -- no cycles, so loop through sources again
-index = 1
+local index = 1
 while ARGV[index + 2] do
 
   -- grab next source and its recorded lock

@@ -1,19 +1,20 @@
 Manager = require './lib/manager'
 pool = require './lib/pool'
 
-m = new Manager
+max = 5000
 
-m.worker 'a', -> 'a'
-m.worker 'b', -> 'b'
-m.worker 'foo', -> @all -> @a(); @b()
+m = new Manager flush: true
 
-pool.acquire (err, db) ->
-  throw err if err
-  db.flushdb ->
-    db.rpush('lock:a', 'queued')
-    db.rpush('jobs', 'a')
-    m.run()
-    setTimeout (->
-      db.set('lock:foo', 'queued')
-      db.rpush('jobs', 'foo')
-    ), 1000
+m.worker 'top', ->
+  for i in [1..max]
+    @get 'load', i
+
+m.worker 'load', (i) ->
+  console.log 'DONE' if i == ('' + max)
+  @worker().load = [1..1000]
+  'ok'
+
+m.run ->
+  console.log 'QUIT'
+
+setTimeout (-> m.request 'top'), 500

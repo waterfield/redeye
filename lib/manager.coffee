@@ -18,6 +18,7 @@ class Manager
     @runners = {}
     @queues = opts.queues ? ['jobs']
     @params = {}
+    @flush = opts.flush
     @as = {}
     @listeners = {}
     @triggers = {}
@@ -30,6 +31,7 @@ class Manager
   # the callback, if provided, will be called.
   run: (@callback) ->
     @connect =>
+      @db.flushdb() if @flush
       @repeat_task 'orphan', 10, => @check_for_orphans()
       @heartbeat()
       @listen()
@@ -54,6 +56,17 @@ class Manager
   # Mix-in some external methods into the Workspace API.
   mixin: (mixins) ->
     Workspace.mixin mixins
+
+  # Request a key from nowhere, as a seed.
+  request: (key, queue, callback) ->
+    console.log 'request', key, queue, callback # XXX
+    if typeof(queue) == 'function'
+      callback = queue
+      queue = null
+    queue ||= @queues[0]
+    @require queue, [key], null, (err, values) =>
+      value = values[0] unless err
+      callback?(null, value)
 
   # WORKER-API METHODS
   # ==================
@@ -92,6 +105,7 @@ class Manager
   log: (key, label, payload) ->
     return unless label and payload
     payload.key = key if key
+    # console.log 'LOG', label, payload
     payload = msgpack.pack payload
     @db.publish label, payload
 
@@ -106,6 +120,7 @@ class Manager
   # attempt to wrap up the worker.
   finish: (id, key, value, callback) ->
     @db.evalsha @scripts.finish, 0, id, @id, key, value, (err, set) =>
+      delete @workers[key]
       @log(key, 'redeye:finish', {}) if set
       callback set
 
@@ -149,7 +164,7 @@ class Manager
   # can be freed by some later manager and `orphans.lua`.
   heartbeat: ->
     @db.setex "heartbeat:#{@id}", 10, 1
-    setTimeout (=> @heartbeat()), 5000
+    @heartbeat_timeout = setTimeout (=> @heartbeat()), 5000
 
   # We received a key from the work queue; claim that key by putting it into
   # our working set, changing the key lock to be a unique worker key, and removing
@@ -188,14 +203,39 @@ class Manager
     worker.dirty = true if dirty
     worker.resume(err)
 
+  # Gracefully shut down, by
+  #
+  # * deleting our heartbeat
+  # * clearing repeated tasks
+  # * imploding all workers
+  # * re-enqueing all active keys
+  # * moving active keys back to pending set
+  # * draining the db pool
+  quit: ->
+    @clear_tasks()
+    clearTimeout @heartbeat_timeout
+    m = @db.multi()
+    m.del 'heartbeat:'+@id
+    for key, worker of @workers
+      m.srem('active:'+@id, key)
+       .sadd('pending', key)
+       .lpush(worker.queue, key)
+      worker.implode()
+    @workers = null
+    m.exec (err) =>
+      return @error err if err
+      pool.release(@db); @db = null
+      pool.release(@sub); @sub = null
+      pool.release(@pop); @pop = null
+      pool.drain =>
+        pool.destroyAllNow =>
+          @callback?()
+          @callback = null
+
   handle:
 
     # We received a quit message, so exit gracefully;
-    #
-    # TODO
-    quit: ->
-      @quitting = true
-      @setTimeout (=> @terminate()), 1000
+    quit: -> @quit()
 
     # The given key has been marked as dirty by the `dirty.lua` script.
     # Mark the worker as dirty so that when it resumes, for any reason,
@@ -255,15 +295,6 @@ class Manager
         .exec (err) =>
           @error err if err
 
-  # Gracefully shut down the manager.
-  #
-  # TODO
-  terminate: ->
-    @db.del "heartbeat:#{@id}", =>
-      # TODO: drain the pool
-      @clear_tasks()
-      @callback?()
-
   # Set the given callback as a task to repeat once per period. Since there
   # may be multiple managers with the same task, make sure a lock is acquired
   # on the task so that it happens once between every period and 1.1*period.
@@ -298,6 +329,8 @@ class Manager
     return unless err
     message = err.stack ? err
     @db.set 'fatal', message
+    console.log message # XXX
+    @quit()
 
 
 module.exports = Manager

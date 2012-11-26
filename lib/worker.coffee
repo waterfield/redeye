@@ -130,6 +130,7 @@ class Worker
   # `@yield` will return the value passed to `@resume`. The error is
   # thrown from inside the fiber in order to create sensible stack traces.
   yield: ->
+    Worker.current = null
     [ err, value ] = yield()
     throw err if err
     value
@@ -286,12 +287,14 @@ class Worker
   # Release our database connection and null out the fiber so that this
   # worker object can be garbage collected.
   implode: ->
+    @dirty = true # so callbacks will also implode
     @release_db() if @db
     @fiber = null
 
   # The worker is done and this is its value. Convert using `toJSON` if present,
   # set the key's value, then tell the queue that the key should be released.
   finish: (value) ->
+    Worker.current = null
     return @implode() if @dirty
     value = value?.toJSON?() ? value
     value = msgpack.pack value
