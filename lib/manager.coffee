@@ -18,7 +18,7 @@ class Manager
     @runners = {}
     @queues = opts.queues ? ['jobs']
     @params = {}
-    @flush = opts.flush
+    { @verbose, @flush } = opts
     @as = {}
     @listeners = {}
     @triggers = {}
@@ -104,6 +104,7 @@ class Manager
   log: (key, label, payload) ->
     return unless label and payload
     payload.key = key if key
+    console.log label, payload if @verbose
     payload = msgpack.pack payload
     @db.publish label, payload
 

@@ -3,6 +3,8 @@ msgpack = require 'msgpack'
 _ = require './util'
 { DependencyError, MultiError } = require './errors'
 
+int_re = /^\d+$/
+
 # One worker is constructed for every task coming
 # through the work queue(s). It maintains a local cache
 # of dependency values, a workspace for running the
@@ -15,6 +17,7 @@ class Worker
   # Break key into prefix and arguments, and set up worker cache.
   constructor: (@id, @key, @queue, @old_deps, @manager) ->
     [@prefix, @args...] = @key.split ':'
+    @convert_args()
     @workspace = new Worker.Workspace
     params = @manager.params[@prefix] || []
     @workspace[param] = @args[i] for param, i in params
@@ -460,5 +463,11 @@ class Worker
         multi.add err
     throw multi if multi
     @cache[key] for key in @all_keys
+
+  # If any arguments look like integers, make them integers
+  convert_args: ->
+    for arg, index in @args
+      if int_re.test(arg)
+        @args[index] = parseInt(arg)
 
 module.exports = Worker

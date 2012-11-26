@@ -8,11 +8,12 @@ _ = require './util'
 
 port = 6379
 host = '127.0.0.1'
+verbose = false
 
 $ = {}
 tests = []
 test_name = []
-context = {workers: [], lets: {}}
+context = {workers: [], lets: {}, expects: []}
 stack = []
 
 db = null
@@ -24,14 +25,31 @@ the_test = null
 passed = 0
 failed = 0
 
+debug = (args...) ->
+  if verbose
+    console.log args...
+
 describe = (name, body) ->
+  clone_context()
   test_name.push name
-  stack.push _.clone(context)
-  context.workers = _.clone(context.workers)
-  context.lets = _.clone(context.lets)
   body()
   context = stack.pop()
   test_name.pop()
+
+clone_context = ->
+  stack.push context
+  context = deep_clone context
+
+deep_clone = (obj) ->
+  if _.isArray(obj)
+    _.map obj, deep_clone
+  else if typeof(obj) == 'object'
+    clone = {}
+    for own k, v of obj
+      clone[k] = deep_clone v
+    clone
+  else
+    obj
 
 setup = (body) ->
   context.setup = body
@@ -40,10 +58,10 @@ worker = (args...) ->
   context.workers.push args
 
 want = (value) ->
-  context.want = value
+  context.expects.push -> wanted value
 
 expect = (body) ->
-  context.expect = body
+  context.expects.push body
 
 has = (hash) ->
   for key, value of hash
@@ -63,25 +81,25 @@ fail = (msg) ->
   false
 
 pass = (msg) ->
-  # console.log "#{the_test.name}: passed"
+  debug "#{the_test.name}: passed"
   passed++
   true
 
 wait = (time) ->
   setTimeout (->
-    # console.log 'run from wait'
+    debug 'run from wait'
     fiber.run()
   ), time
-  # console.log 'yield from wait'
+  debug 'yield from wait'
   yield()
 
 get = (args...) ->
   key = new Buffer(args.join ':')
   db.get key, (err, buf) ->
     obj = msgpack.unpack(buf) if buf
-    # console.log 'run from get'
+    debug 'run from get'
     fiber.run [err, obj]
-  # console.log 'yield from get'
+  debug 'yield from get'
   [err, obj] = yield()
   throw err if err
   obj
@@ -90,9 +108,9 @@ set = (args..., value) ->
   key = args.join ':'
   buf = msgpack.pack value
   db.set key, value, (err) ->
-    # console.log 'run from set'
+    debug 'run from set'
     fiber.run err
-  # console.log 'yield from set'
+  debug 'yield from set'
   err = yield()
   throw err if err
   null
@@ -116,11 +134,11 @@ array_diff_message = (expected, actual, prefix='    ') ->
     b = actual[i]
     if a and b
       unless _.isEqual(a,b)
-        msg += "[#{i}]\n" + diff_message(a,b,prefix+'  ')
+        msg += "#{prefix}[#{i}]\n" + diff_message(a,b,prefix+'  ')
     else if a
-      msg += "[#{i}] - #{JSON.stringify(a)}\n"
+      msg += "#{prefix}[#{i}] - #{JSON.stringify(a)}\n"
     else if b
-      msg += "[#{i}] + #{JSON.stringify(b)}\n"
+      msg += "#{prefix}[#{i}] + #{JSON.stringify(b)}\n"
   msg
 
 object_diff_message = (expected, actual, prefix='    ') ->
@@ -156,7 +174,14 @@ delete_nodes = (val) ->
     delete val.node_id
   val
 
-assert = (key, actual, expected) ->
+assert =
+  equal: (a, b, msg='mismatch') ->
+    if is_equal a, b
+      pass()
+    else
+      fail(msg + "\n" + diff_message(a, b))
+
+compare = (key, actual, expected) ->
   if !actual?
     fail missing_message(key)
   else if actual.error
@@ -166,7 +191,7 @@ assert = (key, actual, expected) ->
     if is_equal actual, expected
       pass()
     else
-      msg = "Key \"#{key}\" was wrong:\n\n"
+      msg = "Key \"#{key}\" was wrong:\n"
       msg = msg + diff_message(expected, actual)
       fail msg
 
@@ -180,12 +205,12 @@ is_equal = (a, b) ->
     for k of b
       return false unless k of a
     for k of a
-      return false unless @is_equal a[k], b[k]
+      return false unless is_equal a[k], b[k]
   else if _.isArray a
     return false unless _.isArray b
     return false unless a.length == b.length
     for i, a_ in a
-      return false unless @is_equal a_, b[i]
+      return false unless is_equal a_, b[i]
   else if typeof(a) == 'number'
     return false unless typeof(b) == 'number'
     return Math.abs(a-b) < 0.0001
@@ -203,7 +228,7 @@ start_tests = ->
       manager.quit()
   fiber = Fiber ->
     run_next_test()
-  # console.log 'run from start'
+  debug 'run from start'
   fiber.run()
 
 run_next_test = ->
@@ -224,10 +249,8 @@ exit = ->
   process.exit failed
 
 test_is_ok = ->
-  if !the_test.setup
-    fail "does not specify 'setup'"
-  else if !(the_test.want || the_test.expect)
-    fail "does not specify 'want' or 'expect'"
+  if !the_test.expects.length
+    fail "does not have any expectations"
   else
     true
 
@@ -239,18 +262,28 @@ run_test = ->
     run_expect()
   run_next_test()
 
+lazy = (fun) ->
+  value = undefined
+  return ->
+    value = fun() if typeof(value) == 'undefined'
+    value
+
 add_lets = ->
-  $ = the_test.lets
+  $ = {}
+  for name, value of the_test.lets
+    if typeof(value) == 'function'
+      value = lazy value
+    $[name] = value
 
 add_workers = ->
   for args in the_test.workers
     manager.worker args...
 
 run_setup = ->
-  manager = new Manager flush: true
+  manager = new Manager { verbose, flush: true }
   add_workers()
   manager.run ->
-    # console.log 'run from run_setup'
+    debug 'run from run_setup'
     fiber.run()
   wait 100
   try
@@ -258,16 +291,16 @@ run_setup = ->
   catch err
     fail err
     manager.quit()
-  # console.log 'yield from run_setup'
+  debug 'yield from run_setup'
   yield()
+
+wanted = (expected) ->
+  compare requested, get(requested), expected
 
 run_expect = ->
   return if the_test.failed
-  if the_test.want
-    the_test.expect = ->
-      assert requested, get(requested), the_test.want
   try
-    the_test.expect()
+    a_test() for a_test in the_test.expects
   catch err
     fail err
 
@@ -280,9 +313,9 @@ request = (args...) ->
   key = args.join ':'
   requested = key
   manager.request key, (err) ->
-    # console.log 'run from request'
+    debug 'run from request'
     fiber.run err
-  # console.log 'yield from request'
+  debug 'yield from request'
   err = yield()
   throw err if err
   null

@@ -71,8 +71,8 @@ if target then
       local lock = redis.call('get', 'lock:'..key)
       -- if this is a source key, record the lock and value
       if first then
-        locks[index - 1] = lock
-        values[index - 2] = value
+        locks[key] = lock
+        values[index + 1] = value
         first = false
       end
       -- mark the key visited so we don't repeat it
@@ -98,6 +98,16 @@ if target then
       end
     end
     -- move on to the next source
+    index = index + 1
+  end
+else
+  local index = 1
+  while ARGV[index + 2] do
+    local key = ARGV[index + 2]
+    local value = redis.call('get', key)
+    local lock = redis.call('get', 'lock:'..key)
+    values[index + 1] = value
+    locks[key] = lock
     index = index + 1
   end
 end
