@@ -44,6 +44,11 @@ local cycles = {'cycle'}
 local locks = {}
 local ncycles = 0
 
+-- :(
+if target == 'null' then
+  target = nil
+end
+
 -- Don't bother checking for cycles unless the request specified
 -- a target. You'd do that if you were making a seed request or
 -- something.

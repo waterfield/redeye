@@ -59,7 +59,6 @@ class Manager
 
   # Request a key from nowhere, as a seed.
   request: (key, queue, callback) ->
-    console.log 'request', key, queue, callback # XXX
     if typeof(queue) == 'function'
       callback = queue
       queue = null
@@ -105,7 +104,6 @@ class Manager
   log: (key, label, payload) ->
     return unless label and payload
     payload.key = key if key
-    # console.log 'LOG', label, payload
     payload = msgpack.pack payload
     @db.publish label, payload
 
@@ -133,10 +131,11 @@ class Manager
   # * `@sub`: used to listen for control messages
   # * `@db`: used for everything else
   connect: (callback) ->
+    @pool = pool()
     scripts.load (err1, @scripts) =>
-      pool.acquire (err2, @pop) =>
-        pool.acquire (err3, @sub) =>
-          pool.acquire (err4, @db) =>
+      @pool.acquire (err2, @pop) =>
+        @pool.acquire (err3, @sub) =>
+          @pool.acquire (err4, @db) =>
             callback?(err1 || err2 || err3 || err4)
 
   # Start listening on the control channel, calling `@perform` when each
@@ -212,6 +211,8 @@ class Manager
   # * moving active keys back to pending set
   # * draining the db pool
   quit: ->
+    return if @_quit
+    @_quit = true
     @clear_tasks()
     clearTimeout @heartbeat_timeout
     m = @db.multi()
@@ -224,11 +225,11 @@ class Manager
     @workers = null
     m.exec (err) =>
       return @error err if err
-      pool.release(@db); @db = null
-      pool.release(@sub); @sub = null
-      pool.release(@pop); @pop = null
-      pool.drain =>
-        pool.destroyAllNow =>
+      @pool.release(@db); @db = null
+      @pool.release(@sub); @sub = null
+      @pool.release(@pop); @pop = null
+      @pool.drain =>
+        @pool.destroyAllNow =>
           @callback?()
           @callback = null
 
@@ -329,7 +330,7 @@ class Manager
     return unless err
     message = err.stack ? err
     @db.set 'fatal', message
-    console.log message # XXX
+    console.log message
     @quit()
 
 

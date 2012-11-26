@@ -1,7 +1,6 @@
 require 'fibers'
 msgpack = require 'msgpack'
 _ = require './util'
-pool = require './pool'
 { DependencyError, MultiError } = require './errors'
 
 # One worker is constructed for every task coming
@@ -19,6 +18,7 @@ class Worker
     @workspace = new Worker.Workspace
     params = @manager.params[@prefix] || []
     @workspace[param] = @args[i] for param, i in params
+    { @pool } = @manager
     @cache = {}
     @deps = []
 
@@ -265,7 +265,7 @@ class Worker
     if @db
       err = new Error "Tried to acquire db when we already had one"
       return callback err
-    pool.acquire (err, @db) =>
+    @pool.acquire (err, @db) =>
       callback err
 
   # Release our database client back to the pool.
@@ -273,7 +273,7 @@ class Worker
     unless @db
       err = new Error "Tried to release db when we didn't have one"
       return callback err
-    pool.release @db
+    @pool.release @db
     @db = null
     callback?()
 
