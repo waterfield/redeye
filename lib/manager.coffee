@@ -67,7 +67,7 @@ class Manager
     queue ||= @queues[0]
     @require queue, [key], null, (err, values) =>
       value = values[0] unless err
-      callback?(null, value)
+      callback?(err, value)
 
   # WORKER-API METHODS
   # ==================

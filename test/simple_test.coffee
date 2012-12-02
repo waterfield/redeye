@@ -18,7 +18,7 @@ describe 'simple', ->
     setup -> request 'fib', 8
     want 34
 
-  describe 'has', ->
+  describe 'with has', ->
 
     worker 'foo', -> $.num() * $.num()
     setup -> request 'foo'
