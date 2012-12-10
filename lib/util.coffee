@@ -31,4 +31,14 @@ _.mixin
       b = arr[idx+1..-1]
       [a..., b...]
 
+  timestamp: ->
+    date = new Date
+    y = date.getFullYear()
+    m = date.getMonth() + 1
+    d = date.getDate()
+    h = date.getHours()
+    m = date.getMinutes()
+    s = date.getSeconds()
+    "#{y}#{m}#{d}#{h}#{m}#{s}"
+
 module.exports = _
