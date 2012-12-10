@@ -62,7 +62,7 @@ class Dispatcher
     setTimeout finish, 500
 
   check_for_crash: (callback) ->
-    @_kv.get 'seed', (err, seed) ->
+    @_kv.get 'seed', (err, seed) =>
       throw err if err
       @crashed(seed) if seed
       callback()
@@ -70,7 +70,7 @@ class Dispatcher
   crashed: (seed) ->
     unless @recover_from_crashes
       @notify_crashed seed, null, false
-    @_kv.redis.incr 'crash_count', (err, count) ->
+    @_kv.redis.incr 'crash_count', (err, count) =>
       throw err if err
       if @max_crashes? && (count > @max_crashes)
         @notify_crashed seed, count, false
@@ -79,7 +79,7 @@ class Dispatcher
         @_seed seed
 
   save_versioned_db: (callback) ->
-    @_kv.redis.save (err) ->
+    @_kv.redis.save (err) =>
       throw err if err
       @version_last_save()
       callback()
