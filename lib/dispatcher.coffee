@@ -1,3 +1,4 @@
+{ exec } = require('child_process')
 Doctor = require './doctor'
 ControlChannel = require './control_channel'
 AuditLog = require './audit_log'
@@ -17,6 +18,7 @@ class Dispatcher
   constructor: (options) ->
     @deps = {}
     @link = {}
+    { @max_crashes, @redis_backup_file, @redis_save_file, @recover_from_crashes } = options
     @_test_mode = options.test_mode
     @_single_use = options.single_use ? @_test_mode
     @_verbose = options.verbose
@@ -58,6 +60,40 @@ class Dispatcher
       @_control_channel.end()
       @_quit_handler?()
     setTimeout finish, 500
+
+  check_for_crash: (callback) ->
+    @_kv.get 'seed', (err, seed) ->
+      throw err if err
+      @crashed(seed) if seed
+      callback()
+
+  crashed: (seed) ->
+    unless @recover_from_crashes
+      @notify_crashed seed, null, false
+    @_kv.redis.incr 'crash_count', (err, count) ->
+      throw err if err
+      if @max_crashes? && (count > @max_crashes)
+        @notify_crashed seed, count, false
+      @notify_crashed seed, count, true
+      @save_versioned_db =>
+        @_seed seed
+
+  save_versioned_db: (callback) ->
+    @_kv.redis.save (err) ->
+      throw err if err
+      @version_last_save()
+      callback()
+
+  version_last_save: ->
+    target = @redis_backup_file + '.' + _.timestamp()
+    exec "cp #{@redis_save_file} #{target}", (err) ->
+      throw err if err
+
+  notify_crashed: (seed, count, will_retry) ->
+    console.log "Dispatcher detected crash:", { seed, count, will_retry, @max_crashes }
+    unless will_retry
+      console.log "DISPATCHER GIVING UP"
+      process.exit 1
 
   # Provide a callback to be called when the dispatcher detects the process is stuck
   on_stuck: (@_stuck_callback) -> this
@@ -105,6 +141,7 @@ class Dispatcher
     @_seeds[key] = true
     @_seed_count++
     @_new_request '!seed', [key]
+    @_kv.set 'seed', key
 
   # Forget everything we know about dependency state.
   _reset: ->
@@ -183,6 +220,8 @@ class Dispatcher
 
   # The seed request was completed. In test mode, quit the workers.
   _unseed: ->
+    @_kv.del 'seed'
+    @_kv.del 'crash_count'
     @_dump_link =>
       unless --@_seed_count
         @_clear_timeout()
@@ -275,5 +314,6 @@ module.exports =
   # requests. Then return the dispatcher.
   run: (options) ->
     dispatcher = new Dispatcher(options ? {})
-    dispatcher.listen()
+    dispatcher.check_for_crash ->
+      dispatcher.listen()
     dispatcher
