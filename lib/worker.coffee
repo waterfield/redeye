@@ -54,7 +54,7 @@ class Worker
     else
       @build vals[0], @_as(opts, prefix)
     @cache[key] = val
-    @sticky[key] = val if opts.sticky
+    # @sticky[key] = val if opts.sticky
     val
 
   # Request a key from the database; if it's not fond, request
@@ -193,7 +193,7 @@ class Worker
       try
         val = @build values[key], @_as(opts[i], prefixes[i])
         @cache[key] ?= val
-        @sticky[key] ?= val if opts[i].sticky
+        # @sticky[key] ?= val if opts[i].sticky
         val
       catch err
         err.context = @_context_list[i]
