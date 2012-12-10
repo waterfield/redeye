@@ -33,12 +33,17 @@ _.mixin
 
   timestamp: ->
     date = new Date
-    y = date.getFullYear()
-    m = date.getMonth() + 1
-    d = date.getDate()
-    h = date.getHours()
-    m = date.getMinutes()
-    s = date.getSeconds()
-    "#{y}#{m}#{d}#{h}#{m}#{s}"
+    y = '' + date.getFullYear()
+    m = '' + (date.getMonth() + 1)
+    d = '' + date.getDate()
+    h = '' + date.getHours()
+    min = '' + date.getMinutes()
+    s = '' + date.getSeconds()
+    m = '0' + m if m.length < 2
+    d = '0' + d if d.length < 2
+    h = '0' + h if h.length < 2
+    min = '0' + min if min.length < 2
+    s = '0' + s if s.length < 2
+    "#{y}#{m}#{d}#{h}#{min}#{s}"
 
 module.exports = _
