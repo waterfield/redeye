@@ -29,6 +29,9 @@ class WorkQueue extends events.EventEmitter
     @_is_input = {}
     @_as = {}
     @listen()
+    if max = process.env['MAX_WORKERS']
+      @max_workers = parseInt(max)
+    @serial = process.env['SERIAL']
     @on 'next', => @next()
 
   connect: (callback) ->
@@ -45,11 +48,11 @@ class WorkQueue extends events.EventEmitter
 
   # Send a log message over redis pubsub
   log: (key, label, payload) ->
-    return unless label and payload
-    payload.key = key
+    # return unless label and payload
+    # payload.key = key
     # payload = JSON.stringify payload
-    payload = msgpack.pack payload
-    @_worker_pubsub.publish label, payload
+    # payload = msgpack.pack payload
+    # @_worker_pubsub.publish label, payload
 
   # React to a control message sent by the dispatcher
   perform: (msg) ->
@@ -107,7 +110,9 @@ class WorkQueue extends events.EventEmitter
   #
   # You can push the job `!quit` to make the work queue die.
   next: ->
+    # console.log @_worker_count, _.keys(@sticky).length # XXX
     @_queue.pop 'jobs', (err, str) =>
+      return if _.__halt # XXX
       if err
         @emit 'next'
         return @error err
@@ -116,9 +121,12 @@ class WorkQueue extends events.EventEmitter
         @log str, 'redeye:start', {}
         @workers[str] = new Worker(str, this, @sticky)
         @workers[str].run()
-        # console.log @_worker_count
       catch e
         @error e unless e == 'no_runner'
+      @try_emit_next()
+
+  try_emit_next: ->
+    if (!@max_workers?) || (@_worker_count < @max_workers)
       @emit 'next'
 
   # Shut down the redis connection and stop running workers
@@ -134,12 +142,16 @@ class WorkQueue extends events.EventEmitter
   reset: ->
     console.log 'worker resetting'
     @sticky = {}
+    for _, w of @workers
+      w.sticky = @sticky
 
   # Mark the given worker as finished (release its memory)
   finish: (key) ->
     @log key, 'redeye:finish', {}
     @_worker_count--
     delete @workers[key]
+    global.gc()
+    @try_emit_next()
 
   # Mark that a fatal exception occurred
   error: (err) ->

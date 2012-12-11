@@ -21,7 +21,9 @@ class Worker
     @slice = @queue.options.db_index
     @req_channel = _('requests').namespace @slice
     @resp_channel = _('responses').namespace @slice
+    @serial = @queue.serial
     @cache = {}
+    @use_sticky = true # XXX
     unless @runner = @queue.runners[@prefix]
       @emit @key, null
       unless @queue._is_input[@prefix]
@@ -46,7 +48,8 @@ class Worker
       return @gets.push(args)
     { prefix, opts, key } = @_parse_args args
     @_last_key = key
-    @_check_caches key
+    if val = @_check_caches key
+      return val
     vals = @_get key
     val = if @cycling
       @cycling = false
@@ -54,7 +57,7 @@ class Worker
     else
       @build vals[0], @_as(opts, prefix)
     @cache[key] = val
-    # @sticky[key] = val if opts.sticky
+    @sticky[key] = val if @use_sticky && opts.sticky
     val
 
   # Request a key from the database; if it's not fond, request
@@ -131,6 +134,10 @@ class Worker
   _ensure_all: ->
     opts = _.map @gets, (args) -> _.opts args
     keys = _.map @gets, (args) -> args.join consts.arg_sep
+    if @serial
+      for key, index in keys
+        @get key, opts[index]
+      return keys.length
     rem = keys.length
     needed = []
     missing = []
@@ -170,6 +177,10 @@ class Worker
     values = {}
     needed = []
     missing = []
+    if @serial
+      values = for key, index in keys
+        @get key, opts[index]
+      return values
     for key in keys
       if val = @sticky[key] ? @cache[key]
         values[key] = val
@@ -193,7 +204,7 @@ class Worker
       try
         val = @build values[key], @_as(opts[i], prefixes[i])
         @cache[key] ?= val
-        # @sticky[key] ?= val if opts[i].sticky
+        @sticky[key] ?= val if @use_sticky && opts[i].sticky
         val
       catch err
         err.context = @_context_list[i]

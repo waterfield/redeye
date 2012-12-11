@@ -22,7 +22,7 @@ class Dispatcher
     @_test_mode = options.test_mode
     @_single_use = options.single_use ? @_test_mode
     @_verbose = options.verbose
-    @_idle_timeout = options.idle_timeout ? (if @_test_mode then 500 else 10000)
+    @_idle_timeout = options.idle_timeout ? (if @_test_mode then 500 else 100000)
     @_audit_log = new AuditLog stream: options.audit
     {db_index} = options
     @_kv = db.key_value {db_index}
@@ -36,6 +36,8 @@ class Dispatcher
     @_cycles = {}
     @_seed_count = 0
     @_seeds = {}
+    if max = process.env['MAX_HEAP']
+      @max_heap = parseInt(max) * 1024 * 1024
 
   connect: (callback) ->
     @_kv.connect =>
@@ -79,6 +81,8 @@ class Dispatcher
         @_seed seed
 
   save_versioned_db: (callback) ->
+    unless @redis_backup_file && @redis_save_file
+      return callback()
     @_kv.redis.save (err) =>
       throw err if err
       @version_last_save()
@@ -116,6 +120,8 @@ class Dispatcher
   # turned into new jobs. You can request the key `!reset` in
   # order to flush the dependency graph.
   _requested: (source, keys) ->
+    return if @_halt
+    return if @check_usage()
     if source == '!reset'
       @_reset()
     else if source == '!invalidate'
@@ -231,12 +237,27 @@ class Dispatcher
   # key are updated, and if they have no more dependencies, are
   # signalled to run again.
   _responded: (key) ->
+    return if @_halt
+    return if @check_usage()
     @_reset_timeout()
     @_audit_log.response key
     @_state[key] = 'done'
     targets = @deps[key] ? []
     delete @deps[key]
     @_progress targets
+
+  check_usage: ->
+    return false unless @max_heap?
+    used = process.memoryUsage().heapUsed
+    console.log 'used', used, 'of', @max_heap # XXX
+    if used > @max_heap
+      @_halt = true
+      _.__halt = true
+      console.log 'Memory usage too high, halting'
+      @_clear_timeout()
+      true
+    else
+      false
 
   # Make progress on each of the given keys by decrementing
   # their count of remaining dependencies. When any reaches
