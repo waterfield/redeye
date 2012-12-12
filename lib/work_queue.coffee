@@ -32,6 +32,7 @@ class WorkQueue extends events.EventEmitter
     if max = process.env['MAX_WORKERS']
       @max_workers = parseInt(max)
     @serial = process.env['SERIAL']
+    console.log { @serial }
     @on 'next', => @next()
 
   connect: (callback) ->
