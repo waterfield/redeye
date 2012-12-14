@@ -11,6 +11,6 @@ r.keys '*', (err, keys) ->
     todo.push lock
     todo.push 'ready'
   r.mset todo, (err) ->
-    throw err
+    throw err if err
     console.log "#{todo.length/2} locks added"
     r.end()
