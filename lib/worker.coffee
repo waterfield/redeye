@@ -99,7 +99,7 @@ class Worker
   get: (args...) ->
     return @defer_get(args) if @in_each
     {prefix, opts, key} = @parse_args args
-    return saved if saved = @cache[key]
+    return cached if (cached = @check_cache(key))?
     @deps.push key
     @require [key], (err, values) =>
       if err
@@ -108,7 +108,7 @@ class Worker
         @resume null, values
       else
         @wait [key]
-    @cache[key] = @build @yield()[0], prefix, opts
+    @got key, @build(@yield()[0], prefix, opts)
 
   # `@keys(key_pattern)`
   #
@@ -348,6 +348,28 @@ class Worker
     key = args.join ':'
     { prefix, opts, key }
 
+  # Look in both our local cache and in the LRU cache for the given
+  # key. If found locally, just return it. If found in the LRU cache,
+  # return it but also link as dependency. If not found, returns undefined.
+  check_cache: (key) ->
+    if (cached = @cache[key])?
+      cached
+    else if (cached = @manager.check_cache(key))?
+      @db.multi()
+        .sadd('sources:'+@key, key)
+        .sadd('targets:'+key, @key)
+        .publish('redeye:require', { source: key, target: @key})
+        .exec (err) -> throw err if err
+      @cache[key] = cached
+    else
+      undefined
+
+  # We built a fresh value from the database. Add it to our cache as
+  # well as the manager's LRU cache.
+  got: (key, value) ->
+    @manager.add_to_cache key, value
+    @cache[key] = value
+
   # Inform the manager of this dependency.
   require: (sources, callback) ->
     @manager.require @queue, sources, @key, callback
@@ -418,7 +440,7 @@ class Worker
   find_needed_keys: ->
     @needed = []
     for key in @all_keys
-      continue if @cache[key]?
+      continue if @check_cache(key)?
       @needed.push key
       @deps.push key
 
@@ -459,7 +481,7 @@ class Worker
       [key, value] = item
       { opts, prefix, index } = @key_opts[key]
       try
-        @cache[key] = @build value, prefix, opts
+        @got key, @build(value, prefix, opts)
       catch err
         err.context = @context_list[index]
         multi ||= new MultiError @

@@ -1,2 +1,0 @@
-#! /bin/sh
-docco lib/*.coffee test/*.coffee test/support/*.coffee

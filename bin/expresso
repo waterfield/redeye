@@ -1,4 +1,0 @@
-#! /bin/sh
-CHROOT=$_/../..
-echo $*
-node_modules/expresso/bin/expresso $*

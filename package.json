@@ -17,6 +17,7 @@
     "fibers": "0.6",
     "msgpack": "0.1",
     "node-uuid": "1.4",
-    "generic-pool": "2.0"
+    "generic-pool": "2.0",
+    "eventemitter2": "0.4"
   }
 }

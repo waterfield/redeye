@@ -1,28 +1,32 @@
 msgpack = require 'msgpack'
 uuid = require 'node-uuid'
+{EventEmitter2} = require 'eventemitter2'
 {CycleError} = require './errors'
 Workspace = require './workspace'
 Worker = require './worker'
+Cache = require './cache'
 pool = require './pool'
 util = require 'util'
 scripts = require './scripts'
 _ = require './util'
 
 # The manager creates and handles `Worker` objects.
-class Manager
+class Manager extends EventEmitter2
 
-  constructor: (opts={}) ->
+  constructor: (opts = {}) ->
     @id = uuid.v1()
     @workers = {}
     @mixins = {}
     @runners = {}
     @queues = opts.queues ? ['jobs']
+    @max_cache_items = opts.max_cache_items || 100
     @params = {}
     { @verbose, @flush } = opts
     @as = {}
     @listeners = {}
     @triggers = {}
     @task_intervals = []
+    @cache = new Cache max_items: @max_cache_items
 
   # API METHODS
   # ===========
@@ -35,6 +39,7 @@ class Manager
       @repeat_task 'orphan', 10, => @check_for_orphans()
       @heartbeat()
       @listen()
+      @emit 'ready'
 
   # Add a worker declaration to this manager. Declarations look like this:
   #
@@ -55,6 +60,9 @@ class Manager
     @runners[prefix] = runner
     Workspace.prototype[prefix] = (args...) -> @get prefix, args...
 
+  # XXX XXX XXX
+  input: (args...) -> @worker args...
+
   # Mix-in some external methods into the Workspace API.
   mixin: (mixins) ->
     Workspace.mixin mixins
@@ -71,6 +79,14 @@ class Manager
 
   # WORKER-API METHODS
   # ==================
+
+  # Check our LRU cache to see if the given key is in it.
+  check_cache: (key) ->
+    @cache.get key
+
+  # Add an item to the LRU cache
+  add_to_cache: (key, value) ->
+    @cache.add key, value
 
   # Log that a dependency is being removed (because on a re-run of a dirty
   # key, a prior dependency was dropped).
@@ -107,6 +123,7 @@ class Manager
     return unless label and payload
     payload.key = key if key
     console.log label, payload if @verbose
+    @emit label, payload
     payload = msgpack.pack payload
     @db.publish label, payload
 
@@ -233,6 +250,7 @@ class Manager
       @pool.release(@pop); @pop = null
       @pool.drain =>
         @pool.destroyAllNow =>
+          @emit 'quit'
           @callback?()
           @callback = null
 
