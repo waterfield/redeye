@@ -5,7 +5,9 @@ r.keys '*', (err, keys) ->
   hash[key] = true for key in keys
   todo = []
   for key in keys
-    continue if key.indexOf(':') < 0
+    idx = key.indexOf(':')
+    continue if idx < 0
+    continue if key.substring(0, idx) == 'lock'
     lock = 'lock:' + key
     continue if hash[lock]
     todo.push lock
