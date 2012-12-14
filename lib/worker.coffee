@@ -51,7 +51,7 @@ class Worker
   # Use the `Manager#log` function to log a message for this key.
   # The resulting message will include `@key` in the payload.
   log: (label, payload) ->
-    @mananger.log @key, label, payload
+    #@manager.log @key, label, payload
 
   # `@get(prefix, args..., opts, callback)`
   #

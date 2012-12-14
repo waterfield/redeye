@@ -20,8 +20,17 @@ m.on 'ready', ->
 m.on 'quit', ->
   console.log 'quitting'
 
-m.onAny (payload) ->
-  console.log @event, payload
-  
-  if @event == 'redeye:finish' && payload.key == seed
-    m.quit()
+count = 0
+rate = ->
+  console.log count
+  count = 0
+
+timer = setInterval rate, 1000
+
+m.on 'redeye:finish', (payload) ->
+  { key } = payload
+  # console.log key
+  count++
+  if key == seed
+    m.quit() 
+    clearInterval timer
