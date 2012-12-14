@@ -1,5 +1,5 @@
 msgpack = require 'msgpack'
-r = require('redis').createClient detect_buffers: true
+r = require('redis').createClient 6379, 'localhost', detect_buffers: true
 
 r.keys '*', (err, all_keys) ->
   throw err if err
