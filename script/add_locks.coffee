@@ -10,7 +10,12 @@ r.keys '*', (err, keys) ->
     continue if hash[lock]
     todo.push lock
     todo.push 'ready'
-  r.mset todo, (err) ->
-    throw err if err
+  done = ->
     console.log "#{todo.length/2} locks added"
     r.end()
+  if todo.length
+    r.mset todo, (err) ->
+      throw err if err
+      done()
+  else
+    done()
