@@ -17,5 +17,11 @@ m.on 'ready', ->
   console.log 'requesting', seed
   m.request seed, console.log
 
+m.on 'quit', ->
+  console.log 'quitting'
+
 m.onAny (payload) ->
   console.log @event, payload
+  
+  if @event == 'redeye:finish' && payload.key == seed
+    m.quit()

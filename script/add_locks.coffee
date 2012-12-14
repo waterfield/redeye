@@ -6,7 +6,9 @@ r.keys '*', (err, keys) ->
   todo = []
   for key in keys
     idx = key.indexOf(':')
-    continue if idx < 0
+    if idx < 0
+      console.log 'skipping', key
+      continue 
     continue if key.substring(0, idx) == 'lock'
     lock = 'lock:' + key
     continue if hash[lock]
