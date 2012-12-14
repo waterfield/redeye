@@ -15,14 +15,14 @@ m.run()
 
 m.on 'ready', ->
   console.log 'requesting', seed
-  m.request seed, console.log
+  m.request seed
 
 m.on 'quit', ->
   console.log 'quitting'
 
 count = 0
 rate = ->
-  console.log count
+  console.log(_.extend {keys_per_sec: count}, m.cache.stats)
   count = 0
 
 timer = setInterval rate, 1000
@@ -32,5 +32,5 @@ m.on 'redeye:finish', (payload) ->
   # console.log key
   count++
   if key == seed
-    m.quit() 
+    m.quit()
     clearInterval timer
