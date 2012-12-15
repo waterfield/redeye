@@ -367,8 +367,6 @@ class Worker
   # We built a fresh value from the database. Add it to our cache as
   # well as the manager's LRU cache.
   got: (key, value, opts) ->
-    if key.split(':')[0] == 'rate' && !value.init
-      console.log "It's #{@key} that inserts the evil rate!!!"
     @manager.add_to_cache key, value, opts.sticky
     @cache[key] = value
 

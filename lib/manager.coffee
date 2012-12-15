@@ -28,6 +28,21 @@ class Manager extends EventEmitter2
     @task_intervals = []
     @cache = new Cache max_items: @max_cache_items
 
+  # UTILITY METHODS
+  # ===============
+
+  # Print information about the state of each key
+  diagnostic: ->
+    log = ['Manager: ', @id, "\n"]
+    for key, worker of @workers
+      if worker.waiting_for
+        log.push ['  [waiting] ', key, "\n"]
+        for dep in worker.waiting_for
+          log.push ['    ', dep, "\n"]
+      else
+        log.push ['  [running] ', key, "\n"]
+    _.flatten(log).join('')
+
   # API METHODS
   # ===========
 

@@ -23,7 +23,17 @@ m.on 'quit', ->
 
 count = 0
 total = 0
+inactive = 0
+diagnosed = false
+
 rate = ->
+  if count
+    inactive = 0
+  else
+    inactive++
+  if inactive && !diagnosed
+    console.log m.diagnostic()
+    diagnosed = true
   console.log(_.extend {total_keys: total, keys_per_sec: count}, m.cache.stats)
   count = 0
 

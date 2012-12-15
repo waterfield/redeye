@@ -12,8 +12,10 @@ class Cache
     @head = new CacheItem
     @head.next = @head.prev = @head
     @stats =
-      items: 0
-      hits: 0
+      lru_items: 0
+      sticky_items: 0
+      lru_hits: 0
+      sticky_hits: 0
       misses: 0
       added: 0
       removed: 0
@@ -21,12 +23,13 @@ class Cache
   add: (key, value, sticky = false) ->
     return if @map[key]? || @sticky[key]?
     if sticky
+      @stats.sticky_items++
       @sticky[key] = value
       return
     @shrink()
     item = new CacheItem key, value
     item.add_after @head
-    @stats.items++
+    @stats.lru_items++
     @stats.added++
     @map[key] = item
 
@@ -34,17 +37,17 @@ class Cache
     if item = @map[key]
       delete @map[key]
       item.remove()
-      @stats.items--
+      @stats.lru_items--
       @stats.removed++
       item.value
 
   get: (key) ->
     if (value = @sticky[key])?
-      @stats.hits++
+      @stats.sticky_hits++
       value
     else if item = @map[key]
       item.hits++
-      @stats.hits++
+      @stats.lru_hits++
       unless item == @head.next
         item.remove()
         item.add_after @head
@@ -55,7 +58,7 @@ class Cache
 
   shrink: ->
     while true
-      break if @max_items && (@stats.items < @max_items)
+      break if @max_items && (@stats.lru_items < @max_items)
       @remove @head.prev.key
 
   keys: ->
