@@ -23,6 +23,7 @@ class Manager extends EventEmitter2
     @params = {}
     { @verbose, @flush } = opts
     @as = {}
+    @done = {}
     @listeners = {}
     @triggers = {}
     @task_intervals = []
@@ -38,7 +39,7 @@ class Manager extends EventEmitter2
       if worker.waiting_for
         log.push ['  [waiting] ', key, "\n"]
         for dep in worker.waiting_for
-          code = if @_done[dep] then 'D' else if @workers[dep] then 'A' else 'M'
+          code = if @done[dep] then 'D' else if @workers[dep] then 'A' else 'M'
           log.push ['    ', code, ' ', dep, "\n"]
       else
         log.push ['  [running] ', key, "\n"]
@@ -149,7 +150,7 @@ class Manager extends EventEmitter2
     @triggers[key] = deps.length
     for dep in deps
       (@listeners[dep] ||= []).push key
-      @handle.ready.apply @, [dep] if @_done?[dep] # XXX
+      @handle.ready.apply @, [dep] if @done[dep]
 
   # A worker has finished with the given value, so use `finish.lua` to
   # attempt to wrap up the worker.
@@ -310,7 +311,7 @@ class Manager extends EventEmitter2
     # resume that key. It will then grab its dependency values from
     # the database and resume work.
     ready: (key, dirty) ->
-      (@_done ||= {})[key] = true # XXX
+      @done[key] = true unless dirty
       return unless keys = @listeners[key]
       delete @listeners[key]
       for key in keys
