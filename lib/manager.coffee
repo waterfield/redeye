@@ -149,6 +149,7 @@ class Manager extends EventEmitter2
     @triggers[key] = deps.length
     for dep in deps
       (@listeners[dep] ||= []).push key
+      @handle.ready.apply @, [dep] if @_done?[dep] # XXX
 
   # A worker has finished with the given value, so use `finish.lua` to
   # attempt to wrap up the worker.
