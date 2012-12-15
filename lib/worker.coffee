@@ -108,7 +108,7 @@ class Worker
         @resume null, values
       else
         @wait [key]
-    @got key, @build(@yield()[0], prefix, opts)
+    @got key, @build(@yield()[0], prefix, opts), opts
 
   # `@keys(key_pattern)`
   #
@@ -366,8 +366,10 @@ class Worker
 
   # We built a fresh value from the database. Add it to our cache as
   # well as the manager's LRU cache.
-  got: (key, value) ->
-    @manager.add_to_cache key, value
+  got: (key, value, opts) ->
+    if key.split(':')[0] == 'rate' && !value.init
+      console.log "It's #{@key} that inserts the evil rate!!!"
+    @manager.add_to_cache key, value, opts.sticky
     @cache[key] = value
 
   # Inform the manager of this dependency.
@@ -481,7 +483,7 @@ class Worker
       [key, value] = item
       { opts, prefix, index } = @key_opts[key]
       try
-        @got key, @build(value, prefix, opts)
+        @got key, @build(value, prefix, opts), opts
       catch err
         err.context = @context_list[index]
         multi ||= new MultiError @

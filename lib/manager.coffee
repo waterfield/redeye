@@ -85,8 +85,8 @@ class Manager extends EventEmitter2
     @cache.get key
 
   # Add an item to the LRU cache
-  add_to_cache: (key, value) ->
-    @cache.add key, value
+  add_to_cache: (key, value, sticky) ->
+    @cache.add key, value, sticky
 
   # Log that a dependency is being removed (because on a re-run of a dirty
   # key, a prior dependency was dropped).

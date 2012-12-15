@@ -7,6 +7,7 @@ class Cache
     @reset()
 
   reset: ->
+    @sticky = {}
     @map = {}
     @head = new CacheItem
     @head.next = @head.prev = @head
@@ -17,8 +18,11 @@ class Cache
       added: 0
       removed: 0
 
-  add: (key, value) ->
-    return if @map[key]
+  add: (key, value, sticky = false) ->
+    return if @map[key]? || @sticky[key]?
+    if sticky
+      @sticky[key] = value
+      return
     @shrink()
     item = new CacheItem key, value
     item.add_after @head
@@ -35,7 +39,10 @@ class Cache
       item.value
 
   get: (key) ->
-    if item = @map[key]
+    if (value = @sticky[key])?
+      @stats.hits++
+      value
+    else if item = @map[key]
       item.hits++
       @stats.hits++
       unless item == @head.next
