@@ -31,10 +31,13 @@ rate = ->
     inactive = 0
   else
     inactive++
-  if inactive && !diagnosed
+  if (inactive > 3) && !diagnosed
     console.log m.diagnostic()
     diagnosed = true
-  console.log(_.extend {total_keys: total, keys_per_sec: count}, m.cache.stats)
+  { lru_hits, sticky_hits, misses } = m.cache.stats
+  ratio = (lru_hits + sticky_hits) / misses
+  ratio = ('' + ratio).substring(0, 4)
+  console.log count, total, ratio, inactive
   count = 0
 
 timer = setInterval rate, 1000
