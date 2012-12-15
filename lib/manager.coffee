@@ -38,7 +38,8 @@ class Manager extends EventEmitter2
       if worker.waiting_for
         log.push ['  [waiting] ', key, "\n"]
         for dep in worker.waiting_for
-          log.push ['    ', dep, "\n"]
+          code = if @_done[dep] then 'D' else if @workers[dep] then 'A' else 'M'
+          log.push ['    ', code, ' ', dep, "\n"]
       else
         log.push ['  [running] ', key, "\n"]
     _.flatten(log).join('')
@@ -308,6 +309,7 @@ class Manager extends EventEmitter2
     # resume that key. It will then grab its dependency values from
     # the database and resume work.
     ready: (key, dirty) ->
+      (@_done ||= {})[key] = true # XXX
       return unless keys = @listeners[key]
       delete @listeners[key]
       for key in keys
