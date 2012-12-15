@@ -21,7 +21,8 @@ class Cache
       removed: 0
 
   add: (key, value, sticky = false) ->
-    return if @map[key]? || @sticky[key]?
+    return if @map[key] != undefined
+    return if @sticky[key] != undefined
     if sticky
       @stats.sticky_items++
       @sticky[key] = value
@@ -42,7 +43,7 @@ class Cache
       item.value
 
   get: (key) ->
-    if (value = @sticky[key])?
+    if (value = @sticky[key]) != undefined
       @stats.sticky_hits++
       value
     else if item = @map[key]

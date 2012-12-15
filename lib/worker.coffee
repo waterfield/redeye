@@ -99,12 +99,13 @@ class Worker
   get: (args...) ->
     return @defer_get(args) if @in_each
     {prefix, opts, key} = @parse_args args
-    return cached if (cached = @check_cache(key))?
+    cached = @check_cache(key)
+    return cached if cached != undefined
     @deps.push key
     @require [key], (err, values) =>
       if err
         @resume err
-      else if values[0]
+      else if values[0] != undefined
         @resume null, values
       else
         @wait [key]
@@ -352,9 +353,9 @@ class Worker
   # key. If found locally, just return it. If found in the LRU cache,
   # return it but also link as dependency. If not found, returns undefined.
   check_cache: (key) ->
-    if (cached = @cache[key])?
+    if (cached = @cache[key]) != undefined
       cached
-    else if (cached = @manager.check_cache(key))?
+    else if (cached = @manager.check_cache(key)) != undefined
       @db.multi()
         .sadd('sources:'+@key, key)
         .sadd('targets:'+key, @key)
@@ -440,7 +441,7 @@ class Worker
   find_needed_keys: ->
     @needed = []
     for key in @all_keys
-      continue if @check_cache(key)?
+      continue if @check_cache(key) != undefined
       @needed.push key
       @deps.push key
 
