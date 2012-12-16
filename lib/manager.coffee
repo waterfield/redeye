@@ -78,7 +78,8 @@ class Manager extends EventEmitter2
     Workspace.prototype[prefix] = (args...) -> @get prefix, args...
 
   # XXX XXX XXX
-  input: (args...) -> @worker args...
+  input: (args...) ->
+    @worker args..., -> null
 
   # Mix-in some external methods into the Workspace API.
   mixin: (mixins) ->
