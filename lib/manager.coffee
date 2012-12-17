@@ -52,7 +52,8 @@ class Manager extends EventEmitter2
   # Start running the manager. When the manager exits,
   # the callback, if provided, will be called.
   run: (@callback) ->
-    @connect =>
+    @connect (err) =>
+      throw err if err
       @db.flushdb() if @flush
       @repeat_task 'orphan', 10, => @check_for_orphans()
       @heartbeat()
@@ -172,11 +173,14 @@ class Manager extends EventEmitter2
   # * `@db`: used for everything else
   connect: (callback) ->
     @pool = pool({@slice})
-    scripts.load (err1, @scripts) =>
-      @pool.acquire (err2, @pop) =>
-        @pool.acquire (err3, @sub) =>
-          @pool.acquire (err4, @db) =>
-            callback?(err1 || err2 || err3 || err4)
+    scripts.load (err, @scripts) =>
+      return callback(err) if err
+      @pool.acquire (err, @pop) =>
+        return callback(err) if err
+        @pool.acquire (err, @sub) =>
+          return callback(err) if err
+          @pool.acquire (err, @db) =>
+            callback(err)
 
   # Start listening on the control channel, calling `@perform` when each
   # message is received.

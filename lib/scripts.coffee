@@ -17,7 +17,7 @@ load_script = (script, callback) ->
   path = "#{__dirname}/../lua/#{script}.lua"
   contents = fs.readFileSync path
   db.send_command 'script', ['load', contents], (err, sha) ->
-    throw new Error err if err
+    return callback(err) if err
     shas[script] = new Buffer(sha)
     load_next_script callback
 
