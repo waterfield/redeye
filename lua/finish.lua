@@ -7,15 +7,17 @@
 --
 -- Inputs
 --
+--   channel: control channel name
 --   worker_id: unique id of the worker
 --   manager_id: unique id of the manager
 --   key: key we're setting
 --   value: value to set as the key
 
-local wid = ARGV[1]
-local mid = ARGV[2]
-local key = ARGV[3]
-local value = ARGV[4]
+local channel = ARGV[1]
+local wid = ARGV[2]
+local mid = ARGV[3]
+local key = ARGV[4]
+local value = ARGV[5]
 
 local lock = redis.call('get', 'lock:'..key)
 
@@ -25,7 +27,7 @@ if lock == wid then
   redis.call('set', 'lock:'..key, 'ready')
   redis.call('set', key, value)
   redis.call('srem', 'active:'..mid, key)
-  redis.call('publish', 'control', 'ready|'..key)
+  redis.call('publish', channel, 'ready|'..key)
   return 1
 -- else just return 0 to indicate failure
 else

@@ -7,8 +7,10 @@
 --
 -- Inputs
 --
+--   control channel
 --   list of keys which are dirty
 
+local channel = ARGV[1]
 local stack = ARGV
 local len = #stack
 local visited = {}
@@ -16,7 +18,7 @@ local target
 local count = 0
 
 -- visit nodes until there are none left
-while len > 0 do
+while len > 1 do
 
   -- pop the last node, mark as visited
   local key = stack[len]
@@ -32,7 +34,7 @@ while len > 0 do
     redis.call('del', key)
   -- if it's being worked on, send a message
   elseif lock and (lock ~= 'queued') then
-    redis.call('publish', 'control', 'dirty|'..key)
+    redis.call('publish', channel, 'dirty|'..key)
   end
 
   if lock then
@@ -43,7 +45,7 @@ while len > 0 do
     redis.call('del', 'sources:'..key)
     redis.call('del', 'targets:'..key)
 
-    -- publish a redeye message # TODO gross!!
+    -- publish a redeye message
     local msg = cmsgpack.pack( {key=key} )
     redis.call('publish', 'redeye:dirty', msg)
 

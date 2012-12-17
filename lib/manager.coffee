@@ -21,7 +21,8 @@ class Manager extends EventEmitter2
     @queues = opts.queues ? ['jobs']
     @max_cache_items = opts.max_cache_items || 100
     @params = {}
-    { @verbose, @flush } = opts
+    { @verbose, @flush, @slice } = opts
+    @control = if @slice then "control_#{@slice}" else 'control'
     @as = {}
     @done = {}
     @listeners = {}
@@ -117,7 +118,7 @@ class Manager extends EventEmitter2
   # the value(s) returned by the script, knowing that some of them may be
   # `null`, so the worker will then call `@wait` on us.
   require: (queue, sources, target, callback) ->
-    @db.evalsha @scripts.require, 0, queue, target, sources..., (err, arr) =>
+    @db.evalsha @scripts.require, 0, @control, queue, target, sources..., (err, arr) =>
       return @error err if err
       if arr.shift().toString() == 'cycle'
         source = arr[0].toString() # NOTE: there may be more!
@@ -156,7 +157,7 @@ class Manager extends EventEmitter2
   # A worker has finished with the given value, so use `finish.lua` to
   # attempt to wrap up the worker.
   finish: (id, key, value, callback) ->
-    @db.evalsha @scripts.finish, 0, id, @id, key, value, (err, set) =>
+    @db.evalsha @scripts.finish, 0, @control, id, @id, key, value, (err, set) =>
       delete @workers[key]
       @log(key, 'redeye:finish', {}) if set
       callback set
@@ -170,7 +171,7 @@ class Manager extends EventEmitter2
   # * `@sub`: used to listen for control messages
   # * `@db`: used for everything else
   connect: (callback) ->
-    @pool = pool()
+    @pool = pool({@slice})
     scripts.load (err1, @scripts) =>
       @pool.acquire (err2, @pop) =>
         @pool.acquire (err3, @sub) =>
@@ -181,7 +182,7 @@ class Manager extends EventEmitter2
   # message is received.
   listen: ->
     @sub.on 'message', (channel, msg) => @perform msg
-    @sub.subscribe 'control'
+    @sub.subscribe @control
     @pop_next()
 
   # Pop job message from the work queues and call `@job` to handle it;
