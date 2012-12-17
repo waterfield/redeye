@@ -118,7 +118,7 @@ class Manager extends EventEmitter2
   # the value(s) returned by the script, knowing that some of them may be
   # `null`, so the worker will then call `@wait` on us.
   require: (queue, sources, target, callback) ->
-    @db.evalsha @scripts.require, 0, @control, queue, target, sources..., (err, arr) =>
+    @db.evalsha @scripts.require, 0, queue, target, sources..., (err, arr) =>
       return @error err if err
       if arr.shift().toString() == 'cycle'
         source = arr[0].toString() # NOTE: there may be more!
