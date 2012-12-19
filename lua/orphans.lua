@@ -44,5 +44,19 @@ for _, key in ipairs(keys) do
   redis.call('publish', 'redeye:orphan', msg)
 end
 
+-- -- if the queue runs dry, safely re-enqueue pending keys
+-- local queue_len = redis.call('llen', queue)
+-- if queue_len == 0 then
+--   local dropped = redis.call('sinter', 'pending', 'lost')
+--   redis.call('sdiffstore', 'lost', 'pending', 'lost')
+--   for _, key in ipairs(dropped) do
+--     redis.call('lpush', queue, key)
+--     local msg = cmsgpack.pack({key=key})
+--     redis.call('publish', 'redeye:orphan', msg)
+--   end
+-- else
+--   redis.call('del', 'lost')
+-- end
+
 -- return number of orphaned keys
 return len
