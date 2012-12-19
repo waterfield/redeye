@@ -46,6 +46,11 @@ class Manager extends EventEmitter2
         log.push ['  [running] ', key, "\n"]
     _.flatten(log).join('')
 
+  # Reset the cache and list of done keys
+  reset: ->
+    @cache.reset()
+    @done = {}
+
   # API METHODS
   # ===========
 

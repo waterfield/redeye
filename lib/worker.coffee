@@ -390,14 +390,14 @@ class Worker
     @db.mget @waiting_for, (err, arr) =>
       return @resume err if err
       arr = for buf, index in arr
-        if arr
+        if buf
           msgpack.unpack buf
         else
           (err ||= []).push @waiting_for[index]
           undefined
       @waiting_for = null
       if err
-        @resume "Expected finished keys but got null: #{err.join ','}"
+        @resume "#{@key} expected finished keys but got nulls: #{err.join ','}"
       else
         @resume null, arr
 
