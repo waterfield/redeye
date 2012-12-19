@@ -356,10 +356,11 @@ class Worker
     if (cached = @cache[key]) != undefined
       cached
     else if (cached = @manager.check_cache(key)) != undefined
+      msg = msgpack.pack(source: key, target: @key)
       @db.multi()
         .sadd('sources:'+@key, key)
         .sadd('targets:'+key, @key)
-        .publish('redeye:require', { source: key, target: @key})
+        .publish('redeye:require', msg)
         .exec (err) -> throw err if err
       @cache[key] = cached
     else
@@ -387,9 +388,18 @@ class Worker
   # and resume the fiber with them.
   stop_waiting: ->
     @db.mget @waiting_for, (err, arr) =>
+      return @resume err if err
+      arr = for buf, index in arr
+        if arr
+          msgpack.unpack buf
+        else
+          (err ||= []).push @waiting_for[index]
+          undefined
       @waiting_for = null
-      arr = (msgpack.unpack buf for buf in arr) unless err
-      @resume err, arr
+      if err
+        @resume "Expected finished keys but got null: #{err.join ','}"
+      else
+        @resume null, arr
 
   # Because we're in an `@each` or `@all` block, don't attempt
   # to get the key yet; instead, just record the context and
