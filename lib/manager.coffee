@@ -24,6 +24,7 @@ class Manager extends EventEmitter2
     { @verbose, @flush, @slice } = opts
     @control = if @slice then "control_#{@slice}" else 'control'
     @as = {}
+    @pack = {}
     @done = {}
     @listeners = {}
     @triggers = {}
@@ -81,6 +82,7 @@ class Manager extends EventEmitter2
     opts = _.opts params
     @params[prefix] = params if params.length
     @as[prefix] = opts.as
+    @pack[prefix] = opts.pack
     @runners[prefix] = runner
     Workspace.prototype[prefix] = (args...) -> @get prefix, args...
 

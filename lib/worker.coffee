@@ -304,6 +304,8 @@ class Worker
     Worker.current = null
     return @implode() if @dirty
     value = value?.toJSON?() ? value
+    if pack = @manager.pack[@prefix]
+      value = @pack_fields value, pack
     value = msgpack.pack value
     @manager.finish @id, @key, value, (ok) =>
       if ok
@@ -417,6 +419,8 @@ class Worker
   build: (value, prefix, opts) ->
     return value unless value?
     @test_for_error value
+    if pack = @manager.pack[prefix]
+      value = @unpack_fields value, pack
     if wrapper = opts.as || @manager.as[prefix]
       new wrapper(value)
     else
@@ -505,5 +509,16 @@ class Worker
     for arg, index in @args
       if int_re.test(arg)
         @args[index] = parseInt(arg)
+
+  # Pack a hash into an array using a list of fields in order.
+  pack_fields: (hash, fields) ->
+    hash[field] for field in fields
+
+  # Unpack a list of values into a hash given a list of fields.
+  unpack_fields: (array, fields) ->
+    hash = {}
+    for field, index in fields
+      hash[field] = array[index]
+    hash
 
 module.exports = Worker
