@@ -1,4 +1,5 @@
 # make sure each key takes < 10ms
+ms_per_key = 10
 
 test 'speed', ->
 
@@ -13,4 +14,4 @@ test 'speed', ->
   want big_num
   expect ->
     dt = new Date().getTime() - $.start
-    assert.that dt < (big_num * 10)
+    assert.that dt < (big_num * ms_per_key)

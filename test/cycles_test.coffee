@@ -1,22 +1,26 @@
 describe 'cycles', ->
 
   worker 'a', -> @b()
-  worker 'b', -> @c()
+  worker 'b', ->
+    try
+      @c()
+    catch e
+      if $.catch
+        @d()
+      else
+        throw e
   worker 'c', -> @a()
   worker 'd', -> 216
 
+  setup -> request 'a'
+
   test 'uncaught', ->
-    setup -> request 'a'
+    has catch: false
     expect ->
       msg = get('a').error[0].trace.split("\n")[0]
       assert.equal msg, 'CycleError: a <- b <- c <- a'
 
   test 'caught', ->
-    worker 'b', ->
-      try
-        @c()
-      catch err
-        @d()
-    setup -> request 'a'
+    has catch: true
     want 216
 
