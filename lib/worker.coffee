@@ -468,7 +468,7 @@ class Worker
     @require @needed, (err, values) =>
       return @resume err if err
       for key, index in @needed
-        if value = values[index]
+        if (value = values[index]) != undefined
           @pending.push [key, value]
         else
           @missing.push key
