@@ -6,9 +6,11 @@ msgpack = require 'msgpack'
 Manager = require './manager'
 _ = require './util'
 
-port = 6379
-host = '127.0.0.1'
-verbose = false
+argv = require('optimist').argv
+
+port = argv.p ? 6379
+host = argv.h ? '127.0.0.1'
+verbose = argv.v?
 
 $ = {}
 tests = []
@@ -299,6 +301,8 @@ add_lets = ->
     $[name] = value
 
 add_workers = ->
+  if argv.w
+    require(argv.w).init manager
   for args in the_test.workers
     manager.worker args...
 
@@ -345,8 +349,7 @@ request = (args...) ->
   null
 
 load_tests = ->
-  for i in [2...process.argv.length]
-    file = process.argv[i]
+  for file in argv._
     raw = fs.readFileSync(file).toString()
     eval coffee.compile(raw)
 
