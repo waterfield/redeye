@@ -93,10 +93,22 @@ wait = (time) ->
   debug 'yield from wait'
   yield()
 
+pack_fields = (hash, fields) ->
+  hash[field] for field in fields
+
+unpack_fields = (array, fields) ->
+  hash = {}
+  for field, index in fields
+    hash[field] = array[index]
+  hash
+
 get = (args...) ->
   key = new Buffer(args.join ':')
+  prefix = key.toString().split(':')[0]
   db.get key, (err, buf) ->
     obj = msgpack.unpack(buf) if buf
+    if pack = manager.pack[prefix]
+      obj = unpack_fields obj, pack
     debug 'run from get'
     fiber.run [err, obj]
   debug 'yield from get'
@@ -106,6 +118,9 @@ get = (args...) ->
 
 set = (args..., value) ->
   key = args.join ':'
+  prefix = key.split(':')[0]
+  if pack = manager.pack[prefix]
+    value = pack_fields value, pack
   buf = msgpack.pack value
   db.multi()
     .set(key, buf)
