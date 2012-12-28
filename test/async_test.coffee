@@ -1,4 +1,4 @@
-test 'async', ->
+test '@async', ->
 
   worker 'test', ->
     @async (callback) ->
