@@ -339,7 +339,8 @@ class Worker
         @manager.cycle @key, err
     else
       trace = err.stack ? err
-      error = err.get_tail?() ? [{ trace, @key, @slice }]
+      slice = @manager.slice
+      error = err.get_tail?() ? [{ trace, @key, slice }]
       @finish { error }
 
   # Parse the @get arguments into the prefix, key arguments,
