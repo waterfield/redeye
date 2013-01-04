@@ -194,7 +194,7 @@ class Manager extends EventEmitter2
   listen: ->
     @sub.on 'message', (channel, msg) => @perform msg
     @sub.subscribe @control
-    @pop_next()
+    @safely_pop_next()
 
   # Pop job message from the work queues and call `@job` to handle it;
   # some time later `@pop_next` will be called again.
@@ -203,6 +203,15 @@ class Manager extends EventEmitter2
       return @error err if err
       [type, value] = response
       @job type, value
+
+  # Safely Pop job message ensuring only one pop at a time from the work queues and call `@job` to handle it;
+  # some time later `@pop_next` will be called again.
+  safely_pop_next: ->
+    return if @popping
+    @popping = true
+    process.nextTick =>
+      @popping = false
+      @pop_next()
 
   # Dispatch the control message to one of our handlers.
   perform: (msg) ->
@@ -242,7 +251,7 @@ class Manager extends EventEmitter2
         @workers[key].run()
       catch e
         @error e
-      @pop_next()
+      @safely_pop_next()
 
   # We want the given worker to resume running, either because its
   # dependencies have been satisfied, or we want to inject an error
