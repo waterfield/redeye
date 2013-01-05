@@ -116,7 +116,6 @@ class Manager extends EventEmitter2
   # Add an item to the LRU cache
   add_to_cache: (prefix, key, value, sticky) ->
     sticky ||= @sticky[prefix]
-    console.log 'SHARED:', sticky, key if prefix == 'code_tables' # XXX
     @cache.add key, value, sticky
 
   # Log that a dependency is being removed (because on a re-run of a dirty

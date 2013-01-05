@@ -29,7 +29,7 @@ class Cache
     if sticky
       @stats.sticky_items++
       @sticky[key] = item
-      return
+      return item.get()
     @shrink()
     item.add_after @head
     @stats.lru_items++
