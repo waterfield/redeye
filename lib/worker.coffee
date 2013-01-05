@@ -51,7 +51,7 @@ class Worker
   # Use the `Manager#log` function to log a message for this key.
   # The resulting message will include `@key` in the payload.
   log: (label, payload) ->
-    #@manager.log @key, label, payload
+    @manager.log @key, label, payload
 
   # `@get(prefix, args..., opts, callback)`
   #
@@ -98,10 +98,12 @@ class Worker
   # dependency error, which can be propagated normally in a stack trace.
   get: (args...) ->
     return @defer_get(args) if @in_each
-    {prefix, opts, key} = @parse_args args
+    { prefix, opts, key } = @parse_args args
+    console.log 'AAA' if prefix == 'code_tables' # XXX
     cached = @check_cache(key)
     return cached if cached != undefined
     @deps.push key
+    console.log 'BBB' if prefix == 'code_tables' # XXX
     @require [key], (err, values) =>
       if err
         @resume err
@@ -109,7 +111,9 @@ class Worker
         @resume null, values
       else
         @wait [key]
-    @got key, @build(@yield()[0], prefix, opts), opts
+    raw = @yield()[0]
+    console.log 'CCC' if prefix == 'code_tables' # XXX
+    @got prefix, key, @build(raw, prefix, opts), opts
 
   # `@keys(key_pattern)`
   #
@@ -371,9 +375,8 @@ class Worker
 
   # We built a fresh value from the database. Add it to our cache as
   # well as the manager's LRU cache.
-  got: (key, value, opts) ->
-    @manager.add_to_cache key, value, opts.sticky
-    @cache[key] = value
+  got: (prefix, key, value, opts) ->
+    @cache[key] = @manager.add_to_cache prefix, key, value, opts.sticky
 
   # Inform the manager of this dependency.
   require: (sources, callback) ->
@@ -497,7 +500,7 @@ class Worker
       [key, value] = item
       { opts, prefix, index } = @key_opts[key]
       try
-        @got key, @build(value, prefix, opts), opts
+        @got prefix, key, @build(value, prefix, opts), opts
       catch err
         err.context = @context_list[index]
         multi ||= new MultiError @

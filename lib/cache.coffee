@@ -1,3 +1,5 @@
+_ = require 'underscore'
+
 class Cache
 
   constructor: (opts = {}) ->
@@ -23,16 +25,17 @@ class Cache
   add: (key, value, sticky = false) ->
     return if @map[key] != undefined
     return if @sticky[key] != undefined
+    item = new CacheItem key, value
     if sticky
       @stats.sticky_items++
-      @sticky[key] = value
+      @sticky[key] = item
       return
     @shrink()
-    item = new CacheItem key, value
     item.add_after @head
     @stats.lru_items++
     @stats.added++
     @map[key] = item
+    item.get()
 
   remove: (key) ->
     if item = @map[key]
@@ -43,16 +46,16 @@ class Cache
       item.value
 
   get: (key) ->
-    if (value = @sticky[key]) != undefined
+    if (item = @sticky[key]) != undefined
       @stats.sticky_hits++
-      value
+      item.get()
     else if item = @map[key]
       item.hits++
       @stats.lru_hits++
       unless item == @head.next
         item.remove()
         item.add_after @head
-      item.value
+      item.get()
     else
       @stats.misses++
       undefined
@@ -86,5 +89,13 @@ class CacheItem
     @next = item.next
     @next.prev = this
     item.next = this
+
+  get: ->
+    if !_.isObject(@value)
+      @value
+    else
+      clone = {}
+      clone.__proto__ = @value
+      clone
 
 module.exports = Cache

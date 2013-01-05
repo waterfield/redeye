@@ -25,6 +25,7 @@ class Manager extends EventEmitter2
     @control = if @slice then "control_#{@slice}" else 'control'
     @as = {}
     @pack = {}
+    @sticky = {}
     @done = {}
     @listeners = {}
     @triggers = {}
@@ -83,6 +84,7 @@ class Manager extends EventEmitter2
     @params[prefix] = params if params.length
     @as[prefix] = opts.as
     @pack[prefix] = opts.pack
+    @sticky[prefix] = opts.sticky
     @runners[prefix] = runner
     Workspace.prototype[prefix] = (args...) -> @get prefix, args...
 
@@ -112,7 +114,9 @@ class Manager extends EventEmitter2
     @cache.get key
 
   # Add an item to the LRU cache
-  add_to_cache: (key, value, sticky) ->
+  add_to_cache: (prefix, key, value, sticky) ->
+    sticky ||= @sticky[prefix]
+    console.log 'SHARED:', sticky, key if prefix == 'code_tables' # XXX
     @cache.add key, value, sticky
 
   # Log that a dependency is being removed (because on a re-run of a dirty
@@ -149,6 +153,7 @@ class Manager extends EventEmitter2
   log: (key, label, payload) ->
     return unless label and payload
     payload.key = key if key
+    payload.slice = @slice if @slice
     console.log label, payload if @verbose
     @emit label, payload
     payload = msgpack.pack payload
@@ -194,7 +199,16 @@ class Manager extends EventEmitter2
   listen: ->
     @sub.on 'message', (channel, msg) => @perform msg
     @sub.subscribe @control
-    @pop_next()
+    @safely_pop_next()
+
+  # Emit an event to pop the next job from the queue, so we don't
+  # blow up the stack
+  safely_pop_next: ->
+    return if @popping
+    @popping = true
+    process.nextTick =>
+      @popping = false
+      @pop_next()
 
   # Pop job message from the work queues and call `@job` to handle it;
   # some time later `@pop_next` will be called again.
@@ -242,7 +256,7 @@ class Manager extends EventEmitter2
         @workers[key].run()
       catch e
         @error e
-      @pop_next()
+      @safely_pop_next()
 
   # We want the given worker to resume running, either because its
   # dependencies have been satisfied, or we want to inject an error
