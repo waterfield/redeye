@@ -23,8 +23,7 @@ class Cache
       removed: 0
 
   add: (key, value, sticky = false) ->
-    return if @map[key] != undefined
-    return if @sticky[key] != undefined
+    return item.get() if item = (@sticky[key] || @map[key])
     item = new CacheItem key, value
     if sticky
       @stats.sticky_items++
