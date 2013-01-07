@@ -15,7 +15,7 @@ verbose = argv.v?
 $ = {}
 tests = []
 test_name = []
-context = {workers: [], lets: {}, expects: []}
+context = {workers: [], lets: {}, expects: [], setups: []}
 stack = []
 
 db = null
@@ -54,7 +54,7 @@ deep_clone = (obj) ->
     obj
 
 setup = (body) ->
-  context.setup = body
+  context.setups.push body
 
 worker = (args...) ->
   context.workers.push args
@@ -314,7 +314,7 @@ run_setup = ->
     fiber.run()
   wait 100
   try
-    the_test.setup()
+    setup() for setup in the_test.setups
   catch err
     fail err
     manager.quit()
