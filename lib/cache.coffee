@@ -90,19 +90,11 @@ class CacheItem
     item.next = this
 
   get: ->
-    @sub @value
-
-  sub: (obj) ->
-    if _.isObject(obj)
-      sub = {}
-      sub.__proto__ = obj
-      for k, v of obj
-        if _.isObject(v) || (_.isArray(v) && _.isObject(v[0]))
-          sub[k] = @sub v
-      sub
-    else if _.isArray(obj)
-      @sub item for item in obj
+    if !_.isObject(@value)
+      @value
     else
-      obj
+      clone = {}
+      clone.__proto__ = @value
+      clone
 
 module.exports = Cache
