@@ -254,8 +254,7 @@ class Worker
     @with hash, fun
     @record_all_opts()
     @find_needed_keys()
-    @find_missing_keys()
-    @get_missing_keys()
+    @discover_missing_keys()
     @build_all()
 
   # `@worker()`
@@ -458,6 +457,12 @@ class Worker
       continue if @check_cache(key) != undefined
       @needed.push key
       @deps.push key
+
+  # Group the needed keys and get them in batches.
+  discover_missing_keys: ->
+    _(@needed).in_groups_of 20, (@needed) =>
+      @find_missing_keys()
+      @get_missing_keys()
 
   # From the keys in `@needed`, ask the database which are available by finding both the
   # lock state and the value of the key. For any unavailable key, put that key in the `@missing`

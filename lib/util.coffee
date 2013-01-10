@@ -26,6 +26,18 @@ _.mixin
     add = (m, x) -> m + (f?(x) ? x ? 0)
     _.reduce list, add, 0
 
+  in_groups_of: (list, n) ->
+    groups = []
+    sub = []
+    for item in list
+      sub.push item
+      if sub.length == n
+        groups.push sub
+        sub = []
+    if sub.length
+      groups.push sub
+    groups
+
   without: (arr, elem) ->
     idx = arr.indexOf elem
     if idx < 0
