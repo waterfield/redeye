@@ -26,7 +26,7 @@ _.mixin
     add = (m, x) -> m + (f?(x) ? x ? 0)
     _.reduce list, add, 0
 
-  in_groups_of: (list, n) ->
+  in_groups_of: (list, n, f) ->
     groups = []
     sub = []
     for item in list
@@ -36,6 +36,8 @@ _.mixin
         sub = []
     if sub.length
       groups.push sub
+    if typeof(f) == 'function'
+      _.each groups, f
     groups
 
   without: (arr, elem) ->
