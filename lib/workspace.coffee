@@ -6,6 +6,11 @@ class Workspace
   @_anchor: {}
   @_choose: (w) -> Workspace._anchor.__proto__ = w
 
+  mutate: (info...) ->
+    if @_mutated?
+      console.log "MUTANT! #{@worker().key}:", info..., @
+    @_mutated = true
+
   # constructor: ->
   #   return if (p = @__proto__).meta or p == Workspace.prototype
   #   list = ((p = p.__proto__) while p.__proto__ != Workspace.prototype)
