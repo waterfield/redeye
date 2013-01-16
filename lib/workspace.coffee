@@ -7,9 +7,7 @@ class Workspace
   @_choose: (w) -> Workspace._anchor.__proto__ = w
 
   mutate: (info...) ->
-    if @_mutated?
-      console.log "MUTANT! #{@worker().key}:", info..., @
-    @_mutated = true
+    Workspace.mutate @, info...
 
   # constructor: ->
   #   return if (p = @__proto__).meta or p == Workspace.prototype
@@ -61,6 +59,11 @@ Workspace.mixin = (mixins) ->
     delete mixins[method] if Worker.prototype[method]
   _.extend Worker.prototype, mixins
   extend_workspace mixins
+
+Workspace.mutate = (obj, info...) ->
+  if obj._mutated?
+    console.log "MUTANT! #{Worker.current.key}:", info..., obj
+  obj._mutated = true
 
 core_methods = {}
 for method in ['emit', 'keys', 'worker', 'bless', 'all', 'each', 'atomic', 'async', 'with', 'log', 'sleep']
