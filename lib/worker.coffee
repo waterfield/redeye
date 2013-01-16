@@ -212,7 +212,7 @@ class Worker
       @context_list = []
       @gets = []
     if key = keys.shift()
-      for val in hash[key]
+      for val in (hash[key] ? [])
         @context[key] = val
         @workspace[key] = val
         @with hash, fun, keys
