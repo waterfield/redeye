@@ -24,6 +24,7 @@ host = argv.h ? '127.0.0.1'
 verbose = argv.v?
 
 $ = {}
+ext = {}
 tests = []
 test_name = []
 context = {workers: [], lets: {}, expects: [], setups: []}
