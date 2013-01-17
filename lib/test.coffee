@@ -426,10 +426,12 @@ add_workers = ->
 run_setup = ->
   manager = new Manager { verbose, flush: true }
   add_workers()
+  manager.on 'ready', ->
+    fiber.run()
   manager.run ->
     debug 'run from run_setup'
     fiber.run()
-  wait 100
+  yield()
   try
     setup() for setup in the_test.setups
   catch err
