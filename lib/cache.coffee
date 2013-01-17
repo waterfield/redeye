@@ -76,6 +76,14 @@ class CacheItem
     @prev = null
     @next = null
     @hits = 0
+    @deep_freeze @value
+
+  deep_freeze: (obj) ->
+    return unless obj
+    return unless typeof(obj) == 'object'
+    return if Object.isFrozen(obj)
+    Object.freeze obj
+    @deep_freeze v for own k, v of obj
 
   remove: ->
     @prev.next = @next
