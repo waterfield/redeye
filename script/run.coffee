@@ -5,7 +5,9 @@
 { Manager } = require '..'
 _ = require 'underscore'
 
-m = new Manager max_cache_items: 100
+slice = process.env['SLICE'] ? 2
+
+m = new Manager max_cache_items: 100, slice: slice
 
 seed = process.argv[2]
 
