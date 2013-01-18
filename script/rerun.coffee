@@ -14,7 +14,7 @@ port = argv.p ? process.env['REDIS_PORT'] ? 6379
 usage() unless argv.w
 
 # Create redis connection
-r = redis.createClient 6379, 'localhost', detect_buffers: true
+r = redis.createClient port, 'localhost', detect_buffers: true
 r.select slice
 
 # Globals
@@ -42,12 +42,22 @@ rerun = ->
   require(argv.w).init manager
   manager.run()
   manager.on 'ready', ->
-    manager.request seed
+    r.publish "requests_#{slice}", '!reset'
+    r.end()
+    setTimeout listen_for_completion, 500
   manager.on 'quit', ->
     console.log 'Done'
     r.end()
-  manager.on 'redeye:finish', (log) ->
-    manager.quit() if log.key == seed
+
+listen_for_completion = ->
+  manager.request seed
+  r = redis.createClient port, 'localhost', return_buffers: true
+  r.select slice
+  r.subscribe 'redeye:finish'
+  r.on 'message', (c, msg) ->
+    manager.quit() if msgpack.unpack(msg).key == seed
+  # manager.on 'redeye:finish', (log) ->
+  #   manager.quit() if log.key == seed
 
 # Delete all the collected intermediate keys, then call `rerun`.
 delete_keys = ->
