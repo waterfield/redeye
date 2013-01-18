@@ -1,5 +1,6 @@
 msgpack = require 'msgpack'
 redis = require 'redis'
+Manager = require '../lib/manager'
 
 # Print usage message and die
 usage = ->
@@ -32,6 +33,11 @@ each = (list, final, fun) ->
 # Boot up manager with worker definitions and re-request
 # seed key. Shut the script down when the seed key is done.
 rerun = ->
+  unless seed
+    console.log "Couldn't determine seed :("
+    r.end()
+    return
+  console.log "Seed: #{seed}"
   manager = new Manager { slice }
   require(argv.w).init manager
   manager.run()
@@ -40,16 +46,18 @@ rerun = ->
   manager.on 'quit', ->
     console.log 'Done'
     r.end()
-  manager.on 'redeye:finish', (payload) ->
-    { key } = payload
-    manager.quit() if key == seed
+  manager.on 'redeye:finish', (log) ->
+    manager.quit() if log.key == seed
 
 # Delete all the collected intermediate keys, then call `rerun`.
 delete_keys = ->
-  r.del to_delete..., (err) ->
-    throw err if err
-    console.log "Deleted #{to_delete.length/4} keys."
-    console.log "Seed: #{seed}"
+  if to_delete.length
+    r.del to_delete..., (err) ->
+      throw err if err
+      console.log "Deleted #{to_delete.length/4} keys"
+      rerun()
+  else
+    console.log "No keys to delete"
     rerun()
 
 # Find out what keys are intermediate and what is the seed,
