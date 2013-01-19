@@ -83,7 +83,7 @@ scan_db = ->
           throw err if err
           r.scard "sources:#{key}", (err, sources) ->
             throw err if err
-            if sources
+            if sources || (prefix == 'one_shot_cashout')
               seed = key unless targets
               to_delete.push key
               to_delete.push 'lock:'+key
