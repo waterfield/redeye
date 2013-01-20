@@ -98,10 +98,10 @@ class CacheItem
     item.next = this
 
   get: ->
-    if _.isObject(@value)
-      @sub @value
-    else if _.isArray(@value) && _.isObject(@value[0])
+    if _.isArray(@value) && _.isObject(@value[0])
       @sub item for item in @value
+    else if _.isObject(@value)
+      @sub @value
     else
       @value
 

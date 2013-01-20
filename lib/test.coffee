@@ -428,17 +428,20 @@ run_setup = ->
   manager = new Manager { verbose, flush: true }
   add_workers()
   manager.on 'ready', ->
-    fiber.run()
+    process.nextTick ->
+      debug 'run on worker ready', the_test.name
+      fiber.run()
   manager.run ->
-    debug 'run from run_setup'
+    debug 'run when manager quits'
     fiber.run()
+  debug 'wait for manager ready'
   yield()
   try
     setup() for setup in the_test.setups
   catch err
     fail err
     manager.quit()
-  debug 'yield from run_setup'
+  debug 'wait for manager quit'
   yield() if requested
 
 # Go get a certain key and compare it to the given expected value.

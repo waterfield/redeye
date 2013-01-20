@@ -20,3 +20,11 @@ describe 'multi', ->
   test 'each', ->
     setup -> request '_each'
     want 3
+
+test 'iterators', ->
+
+  worker '_all', -> _.flatten @all x: [1,2,3], @foo
+  worker 'foo', 'x', -> [ { @x } ]
+
+  setup -> request '_all'
+  want [{x:1},{x:2},{x:3}]
