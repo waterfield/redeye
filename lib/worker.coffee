@@ -359,7 +359,7 @@ class Worker
       cached
     else if (cached = @manager.check_cache(key)) != undefined
       msg = source: key, target: @key
-      msg.slice = manager.slice if manager.slice?
+      msg.slice = @manager.slice if @manager.slice
       msg = msgpack.pack(msg)
       @db.multi()
         .sadd('sources:'+@key, key)
