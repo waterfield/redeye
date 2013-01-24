@@ -97,13 +97,13 @@ class CacheItem
     @next.prev = this
     item.next = this
 
-  get: ->
-    if _.isArray(@value) && _.isObject(@value[0])
-      @sub item for item in @value
-    else if _.isObject(@value)
-      @sub @value
+  get: (value = @value) ->
+    if _.isArray(value)
+      @get(item) for item in value
+    else if _.isObject(value)
+      @sub value
     else
-      @value
+      value
 
   sub: (parent) ->
     child = {}
