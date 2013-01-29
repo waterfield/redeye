@@ -1,6 +1,7 @@
 msgpack = require 'msgpack'
 redis = require 'redis'
 Manager = require '../lib/manager'
+_ = require '../lib/util'
 
 # Print usage message and die
 usage = ->
@@ -11,6 +12,8 @@ usage = ->
 argv = require('optimist').argv
 slice = argv.s ? process.env['SLICE'] ? 2
 port = argv.p ? process.env['REDIS_PORT'] ? 6379
+seed = argv.seed ? process.env['SEED'] ? null
+
 usage() unless argv.w
 
 # Create redis connection
@@ -18,7 +21,6 @@ r = redis.createClient port, 'localhost', detect_buffers: true
 r.select slice
 
 # Globals
-seed = null
 to_delete = []
 manager = null
 
@@ -62,10 +64,9 @@ listen_for_completion = ->
 # Delete all the collected intermediate keys, then call `rerun`.
 delete_keys = ->
   if to_delete.length
-    r.del to_delete..., (err) ->
-      throw err if err
-      console.log "Deleted #{to_delete.length/4} keys"
-      rerun()
+    chunks = _(to_delete).in_groups_of(10000)
+    each chunks, rerun, (chunk, next) ->
+      r.del chunk..., next
   else
     console.log "No keys to delete"
     rerun()
@@ -84,7 +85,7 @@ scan_db = ->
           r.scard "sources:#{key}", (err, sources) ->
             throw err if err
             if sources || (prefix == 'one_shot_cashout')
-              seed = key unless targets
+              seed ?= key unless targets
               to_delete.push key
               to_delete.push 'lock:'+key
               to_delete.push 'sources:'+key
