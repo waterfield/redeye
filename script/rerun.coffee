@@ -28,8 +28,8 @@ manager = null
 each = (list, final, fun) ->
   index = 0
   next = ->
-    return final() if ++index == list.length
-    fun list[index], next
+    return final() if index == list.length
+    fun list[index++], next
   next()
 
 # Boot up manager with worker definitions and re-request
@@ -65,7 +65,11 @@ listen_for_completion = ->
 delete_keys = ->
   if to_delete.length
     chunks = _(to_delete).in_groups_of(10000)
-    each chunks, rerun, (chunk, next) ->
+    wrap_up = ->
+      console.log "Deleted #{to_delete.length/4} keys"
+      rerun()
+    console.log chunks
+    each chunks, wrap_up, (chunk, next) ->
       r.del chunk..., next
   else
     console.log "No keys to delete"
