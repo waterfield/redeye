@@ -48,8 +48,15 @@ rerun = ->
     r.end()
     setTimeout listen_for_completion, 500
   manager.on 'quit', ->
-    console.log 'Done'
     r.end()
+    r = redis.createClient port, 'localhost', return_buffers: true
+    r.select slice
+    r.get seed, (err, buf) ->
+      throw err if err
+      value = msgpack.unpack(buf) if buf
+      console.log 'Done. Got:', value
+      r.end()
+
 
 listen_for_completion = ->
   manager.request seed
