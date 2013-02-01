@@ -61,11 +61,13 @@ class Manager extends EventEmitter2
   run: (@callback) ->
     @connect (err) =>
       throw err if err
-      @db.flushdb() if @flush
       @repeat_task 'orphan', 10, => @check_for_orphans()
       @heartbeat()
       @listen()
-      @emit 'ready'
+      if @flush
+        @db.flushdb => @emit 'ready'
+      else
+        @emit 'ready'
 
   # Add a worker declaration to this manager. Declarations look like this:
   #

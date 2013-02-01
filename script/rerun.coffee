@@ -1,6 +1,7 @@
 msgpack = require 'msgpack'
 redis = require 'redis'
 Manager = require '../lib/manager'
+_ = require '../lib/util'
 
 # Print usage message and die
 usage = ->
@@ -11,6 +12,8 @@ usage = ->
 argv = require('optimist').argv
 slice = argv.s ? process.env['SLICE'] ? 2
 port = argv.p ? process.env['REDIS_PORT'] ? 6379
+seed = argv.seed ? process.env['SEED'] ? null
+
 usage() unless argv.w
 
 # Create redis connection
@@ -18,7 +21,6 @@ r = redis.createClient port, 'localhost', detect_buffers: true
 r.select slice
 
 # Globals
-seed = null
 to_delete = []
 manager = null
 
@@ -26,8 +28,8 @@ manager = null
 each = (list, final, fun) ->
   index = 0
   next = ->
-    return final() if ++index == list.length
-    fun list[index], next
+    return final() if index == list.length
+    fun list[index++], next
   next()
 
 # Boot up manager with worker definitions and re-request
@@ -46,8 +48,15 @@ rerun = ->
     r.end()
     setTimeout listen_for_completion, 500
   manager.on 'quit', ->
-    console.log 'Done'
     r.end()
+    r = redis.createClient port, 'localhost', return_buffers: true
+    r.select slice
+    r.get seed, (err, buf) ->
+      throw err if err
+      value = msgpack.unpack(buf) if buf
+      console.log 'Done. Got:', value
+      r.end()
+
 
 listen_for_completion = ->
   manager.request seed
@@ -62,10 +71,13 @@ listen_for_completion = ->
 # Delete all the collected intermediate keys, then call `rerun`.
 delete_keys = ->
   if to_delete.length
-    r.del to_delete..., (err) ->
-      throw err if err
+    chunks = _(to_delete).in_groups_of(10000)
+    wrap_up = ->
       console.log "Deleted #{to_delete.length/4} keys"
       rerun()
+    console.log chunks
+    each chunks, wrap_up, (chunk, next) ->
+      r.del chunk..., next
   else
     console.log "No keys to delete"
     rerun()
@@ -84,7 +96,7 @@ scan_db = ->
           r.scard "sources:#{key}", (err, sources) ->
             throw err if err
             if sources || (prefix == 'one_shot_cashout')
-              seed = key unless targets
+              seed ?= key unless targets
               to_delete.push key
               to_delete.push 'lock:'+key
               to_delete.push 'sources:'+key
