@@ -21,7 +21,7 @@ class Manager extends EventEmitter2
     @queues = opts.queues ? ['jobs']
     @max_cache_items = opts.max_cache_items || 100
     @params = {}
-    { @verbose, @flush, @slice } = opts
+    { @verbose, @flush, @slice, @host, @port } = opts
     @control = if @slice then "control_#{@slice}" else 'control'
     @as = {}
     @pack = {}
@@ -187,7 +187,7 @@ class Manager extends EventEmitter2
   # * `@sub`: used to listen for control messages
   # * `@db`: used for everything else
   connect: (callback) ->
-    @pool = pool({@slice})
+    @pool = pool({@slice, @port, @host})
     scripts.load (err, @scripts) =>
       return callback(err) if err
       @pool.acquire (err, @pop) =>

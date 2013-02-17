@@ -57,7 +57,6 @@ rerun = ->
       console.log 'Done. Got:', value
       r.end()
 
-
 listen_for_completion = ->
   manager.request seed
   r = redis.createClient port, 'localhost', return_buffers: true

@@ -1,10 +1,12 @@
 redis = require 'redis'
 { Pool } = require 'generic-pool'
 
-port = 6379
-host = '127.0.0.1'
+default_port = 6379
+default_host = '127.0.0.1'
 
 module.exports = (opts) ->
+  port = opts.port ? default_port
+  host = opts.host ? default_host
   Pool
     max: 1000
     # log: true
