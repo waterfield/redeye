@@ -40,7 +40,7 @@ rerun = ->
     r.end()
     return
   console.log "Seed: #{seed}"
-  manager = new Manager { slice }
+  manager = new Manager { slice, port }
   require(argv.w).init manager
   manager.run()
   manager.on 'ready', ->
