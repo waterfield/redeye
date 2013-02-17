@@ -188,14 +188,14 @@ class Manager extends EventEmitter2
   # * `@db`: used for everything else
   connect: (callback) ->
     @pool = pool({@slice, @port, @host})
-    scripts.load (err, @scripts) =>
+    @pool.acquire (err, @pop) =>
       return callback(err) if err
-      @pool.acquire (err, @pop) =>
+      @pool.acquire (err, @sub) =>
         return callback(err) if err
-        @pool.acquire (err, @sub) =>
+        @pool.acquire (err, @db) =>
           return callback(err) if err
-          @pool.acquire (err, @db) =>
-            callback(err)
+          scripts.load @db, (err, @scripts) =>
+            callback err
 
   # Start listening on the control channel, calling `@perform` when each
   # message is received.
