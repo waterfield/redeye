@@ -1,8 +1,13 @@
 msgpack = require 'msgpack'
 redis = require 'redis'
+argv = require('optimist').argv
 
-r = redis.createClient 6379, 'localhost', return_buffers: true
-r.select process.env['SLICE'] if process.env['SLICE']
+port = argv.p ? 6379
+host = argv.h ? 'localhost'
+slice = argv.s ? process.env['SLICE'] ? 2
+
+r = redis.createClient port, host, return_buffers: true
+r.select slice
 
 r.get process.argv[2], (err, buf) ->
   throw err if err
