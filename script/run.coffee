@@ -7,11 +7,12 @@ _ = require 'underscore'
 
 slice = process.env['SLICE'] ? 2
 
-m = new Manager max_cache_items: 100, slice: slice
+m = new Manager max_cache_items: 100, slice: slice, flush: true
 
 seed = process.argv[2]
 
 for worker_file in process.argv[3..]
+  console.log 'loading', worker_file
   require(worker_file).init m
 
 m.run()
@@ -46,7 +47,7 @@ timer = setInterval rate, 1000
 
 m.on 'redeye:finish', (payload) ->
   { key } = payload
-  # console.log key
+  console.log key
   count++
   total++
   if key == seed

@@ -193,7 +193,7 @@ set = (args..., value) ->
   db.multi()
     .set(key, buf)
     .set('lock:'+key, 'ready')
-    .exec (err) =>
+    .exec (err, vals) =>
       debug 'run from set'
       fiber.run err
   debug 'yield from set'
@@ -287,7 +287,7 @@ assert =
     if is_equal a, b
       pass()
     else
-      fail(msg + "\n" + diff_message(a, b))
+      fail(msg + "\n" + diff_message(b, a))
 
 # Compare two things for equality. Pass or fail the test based
 # on this, and print a recursive diff error. The 'key' argument

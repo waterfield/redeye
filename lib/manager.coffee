@@ -21,7 +21,7 @@ class Manager extends EventEmitter2
     @queues = opts.queues ? ['jobs']
     @max_cache_items = opts.max_cache_items || 100
     @params = {}
-    { @verbose, @flush, @slice } = opts
+    { @verbose, @flush, @slice, @host, @port } = opts
     @control = if @slice then "control_#{@slice}" else 'control'
     @as = {}
     @pack = {}
@@ -61,13 +61,15 @@ class Manager extends EventEmitter2
   run: (@callback) ->
     @connect (err) =>
       throw err if err
-      @repeat_task 'orphan', 10, => @check_for_orphans()
-      @heartbeat()
-      @listen()
-      if @flush
-        @db.flushdb => @emit 'ready'
-      else
+      finish = =>
+        @repeat_task 'orphan', 10, => @check_for_orphans()
+        @heartbeat()
+        @listen()
         @emit 'ready'
+      if @flush
+        @db.flushdb -> finish()
+      else
+        finish()
 
   # Add a worker declaration to this manager. Declarations look like this:
   #
@@ -185,15 +187,15 @@ class Manager extends EventEmitter2
   # * `@sub`: used to listen for control messages
   # * `@db`: used for everything else
   connect: (callback) ->
-    @pool = pool({@slice})
-    scripts.load (err, @scripts) =>
+    @pool = pool({@slice, @port, @host})
+    @pool.acquire (err, @pop) =>
       return callback(err) if err
-      @pool.acquire (err, @pop) =>
+      @pool.acquire (err, @sub) =>
         return callback(err) if err
-        @pool.acquire (err, @sub) =>
+        @pool.acquire (err, @db) =>
           return callback(err) if err
-          @pool.acquire (err, @db) =>
-            callback(err)
+          scripts.load @db, (err, @scripts) =>
+            callback err
 
   # Start listening on the control channel, calling `@perform` when each
   # message is received.

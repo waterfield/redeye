@@ -40,7 +40,7 @@ rerun = ->
     r.end()
     return
   console.log "Seed: #{seed}"
-  manager = new Manager { slice }
+  manager = new Manager { slice, port }
   require(argv.w).init manager
   manager.run()
   manager.on 'ready', ->
@@ -55,8 +55,14 @@ rerun = ->
       throw err if err
       value = msgpack.unpack(buf) if buf
       console.log 'Done. Got:', value
-      r.end()
-
+      r.lrange 'errors', 0, 0, (err, list) ->
+        throw err if err
+        if list.length
+          err = JSON.parse list[0].toString()
+          console.log "An error:", err
+        else
+          console.log "No errors!"
+        r.end()
 
 listen_for_completion = ->
   manager.request seed
@@ -70,12 +76,12 @@ listen_for_completion = ->
 
 # Delete all the collected intermediate keys, then call `rerun`.
 delete_keys = ->
+  to_delete.push 'errors'
   if to_delete.length
     chunks = _(to_delete).in_groups_of(10000)
     wrap_up = ->
-      console.log "Deleted #{to_delete.length/4} keys"
+      console.log "Deleted #{(to_delete.length-1)/4} keys"
       rerun()
-    console.log chunks
     each chunks, wrap_up, (chunk, next) ->
       r.del chunk..., next
   else

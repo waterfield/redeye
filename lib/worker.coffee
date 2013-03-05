@@ -345,10 +345,10 @@ class Worker
   # Parse the @get arguments into the prefix, key arguments,
   # and options.
   parse_args: (args) ->
-    prefix = args[0]
     @on_cycle = _.callback args
     opts = _.opts args
     key = args.join ':'
+    prefix = key.split(':')[0]
     { prefix, opts, key }
 
   # Look in both our local cache and in the LRU cache for the given
@@ -445,7 +445,7 @@ class Worker
     for args, index in @gets
       opts = _.opts args
       key = args.join ':'
-      prefix = args[0]
+      prefix = key.split(':')[0]
       @key_opts[key] = { prefix, opts, index }
       @all_keys.push key
 
