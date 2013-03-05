@@ -24,17 +24,18 @@ class Workspace
     ns = namespace(opts)
     prefix = "#{ns}.#{prefix}" if ns
     manager = Worker.current.manager
+    params = manager.params[prefix]
+    obj = {} if params && !obj && !args.length
     if obj
-      unless params = manager.params[prefix]
-        throw new Error "No parameters defined for '#{prefix}'"
+      throw new Error "No parameters defined for '#{prefix}'" unless params
       root = Worker.current.workspace
       args = for param in params
         if typeof(param) == 'object'
-          param
-        else if args.hasOwnProperty param
-          args[param]
+          continue
+        else if obj.hasOwnProperty param
+          obj[param]
         else if this.hasOwnProperty param
-          @[param]
+          this[param]
         else if root.hasOwnProperty param
           root[param]
         else
@@ -51,7 +52,7 @@ opt_names = ['sticky', 'as', 'namespace']
 
 parse_args = (args) ->
   callback = _.callback args
-  if typeof(args[0]) == 'string'
+  if typeof(args[0]) != 'object'
     opts = _.opts args
   else if args.length > 1
     opts = _.opts args
