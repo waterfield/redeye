@@ -20,32 +20,61 @@ class Workspace
     Worker.current.workspace
 
   get: (prefix, args...) ->
-    # if we provided no arguments, only assume it's a new-style
-    # key if the worker defines its parameters
-    callback = _.callback args
-    obj = args[0]
+    [args, obj, opts, callback] = parse_args args
+    ns = namespace(opts)
+    prefix = "#{ns}.#{prefix}" if ns
     manager = Worker.current.manager
-    obj = {} if (!args.length) && manager.params[prefix]
-    if obj && (typeof(obj) == 'object') && !('str' of obj || 'as' of obj || 'sticky' of obj)
+    if obj
       unless params = manager.params[prefix]
         throw new Error "No parameters defined for '#{prefix}'"
       root = Worker.current.workspace
       args = for param in params
         if typeof(param) == 'object'
           param
-        else if obj.hasOwnProperty param
-          obj[param]
+        else if args.hasOwnProperty param
+          args[param]
         else if this.hasOwnProperty param
           @[param]
         else if root.hasOwnProperty param
           root[param]
         else
           throw new Error "Can't determine parameter '#{param}' for '#{prefix}'"
+    opts.namespace = null
+    args.push opts
     args.push callback if callback
     Worker.current.get prefix, args...
 
   toString: ->
     "<Workspace: #{@worker().prefix}>"
+
+opt_names = ['sticky', 'as', 'namespace']
+
+parse_args = (args) ->
+  callback = _.callback args
+  if typeof(args[0]) == 'string'
+    opts = _.opts args
+  else if args.length > 1
+    opts = _.opts args
+    obj = args[0]
+  else if args.length == 1
+    for name in opt_names
+      if name of args[0]
+        opts = args[0]
+        break
+    unless opts
+      obj = args[0]
+      opts = {}
+  else
+    opts = {}
+  [args, obj, opts, callback]
+
+namespace = (opts) ->
+  ns = opts.namespace
+  if ns == undefined
+    manager = Worker.current.manager
+    opts = manager.opts[Worker.current.prefix]
+    ns = opts.namespace
+  ns
 
 extend_workspace = (methods) ->
   for method, fun of methods

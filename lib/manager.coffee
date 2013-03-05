@@ -83,10 +83,19 @@ class Manager extends EventEmitter2
   # `@get(prefix, ...)`.
   worker: (prefix, params..., runner) ->
     opts = _.opts params
+    opts.namespace = @default_namespace if opts.namespace == undefined
+    short_prefix = prefix
+    prefix = "#{opts.namespace}.#{prefix}" if opts.namespace
     @params[prefix] = params if params.length
     @opts[prefix] = opts
     @runners[prefix] = runner
-    Workspace.prototype[prefix] = (args...) -> @get prefix, args...
+    Workspace.prototype[short_prefix] = (args...) -> @get short_prefix, args...
+
+  # Declare a number of workers, all in a given namespace
+  namespace: (namespace, body) ->
+    @default_namespace = namespace
+    body()
+    @default_namespace = undefined
 
   # XXX XXX XXX
   input: (args...) ->

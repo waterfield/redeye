@@ -348,6 +348,9 @@ class Worker
     @on_cycle = _.callback args
     opts = _.opts args
     key = args.join ':'
+    namespace = opts.namespace
+    namespace = @manager.opts[@prefix].namespace if namespace == undefined
+    key = "#{namespace}.#{key}" if namespace
     prefix = key.split(':')[0]
     { prefix, opts, key }
 
