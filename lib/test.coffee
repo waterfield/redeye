@@ -173,7 +173,7 @@ get = (args...) ->
   prefix = key.toString().split(':')[0]
   db.get key, (err, buf) ->
     obj = msgpack.unpack(buf) if buf
-    if pack = manager.pack[prefix]
+    if pack = manager.opts[prefix]?.pack
       obj = unpack_fields obj, pack
     debug 'run from get'
     fiber.run [err, obj]
@@ -187,7 +187,7 @@ get = (args...) ->
 set = (args..., value) ->
   key = args.join ':'
   prefix = key.split(':')[0]
-  if pack = manager.pack[prefix]
+  if pack = manager.opts[prefix]?.pack
     value = pack_fields value, pack
   buf = msgpack.pack value
   db.multi()

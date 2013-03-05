@@ -23,9 +23,7 @@ class Manager extends EventEmitter2
     @params = {}
     { @verbose, @flush, @slice, @host, @port } = opts
     @control = if @slice then "control_#{@slice}" else 'control'
-    @as = {}
-    @pack = {}
-    @sticky = {}
+    @opts = {}
     @done = {}
     @listeners = {}
     @triggers = {}
@@ -86,9 +84,7 @@ class Manager extends EventEmitter2
   worker: (prefix, params..., runner) ->
     opts = _.opts params
     @params[prefix] = params if params.length
-    @as[prefix] = opts.as
-    @pack[prefix] = opts.pack
-    @sticky[prefix] = opts.sticky
+    @opts[prefix] = opts
     @runners[prefix] = runner
     Workspace.prototype[prefix] = (args...) -> @get prefix, args...
 
@@ -119,7 +115,7 @@ class Manager extends EventEmitter2
 
   # Add an item to the LRU cache
   add_to_cache: (prefix, key, value, sticky) ->
-    sticky ||= @sticky[prefix]
+    sticky ||= @opts[prefix]?.sticky
     @cache.add key, value, sticky
 
   # Log that a dependency is being removed (because on a re-run of a dirty

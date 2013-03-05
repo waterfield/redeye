@@ -303,7 +303,7 @@ class Worker
     Worker.current = null
     return @implode() if @dirty
     value = value?.toJSON?() ? value
-    if pack = @manager.pack[@prefix]
+    if pack = @manager.opts[@prefix]?.pack
       value = @pack_fields value, pack
     value = msgpack.pack value
     @manager.finish @id, @key, value, (ok) =>
@@ -420,9 +420,9 @@ class Worker
   build: (value, prefix, opts) ->
     return value unless value?
     @test_for_error value
-    if pack = @manager.pack[prefix]
+    if pack = @manager.opts[prefix]?.pack
       value = @unpack_fields value, pack
-    if wrapper = opts.as || @manager.as[prefix]
+    if wrapper = opts.as || @manager.opts[prefix]?.as
       new wrapper(value)
     else
       value
