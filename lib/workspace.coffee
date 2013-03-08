@@ -32,7 +32,7 @@ class Workspace
       args = for param in params
         if typeof(param) == 'object'
           continue
-        else if obj.hasOwnProperty param
+        else if param of obj
           obj[param]
         else if this.hasOwnProperty param
           this[param]
