@@ -34,7 +34,7 @@ class Workspace
           continue
         else if param of obj
           obj[param]
-        else if this.hasOwnProperty param
+        else if param of this
           this[param]
         else if root.hasOwnProperty param
           root[param]

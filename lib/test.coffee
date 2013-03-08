@@ -64,6 +64,8 @@ clone_context = ->
 deep_clone = (obj) ->
   if _.isArray(obj)
     _.map obj, deep_clone
+  else if obj == null
+    null
   else if typeof(obj) == 'object'
     clone = {}
     for own k, v of obj
@@ -296,7 +298,10 @@ compare = (key, actual, expected) ->
   if arguments.length == 2
     [key, actual, expected] = [requested, key, actual]
   if !actual?
-    fail missing_message(key)
+    if !expected?
+      pass()
+    else
+      fail missing_message(key)
   else if actual.error
     fail error_message(key, actual.error)
   else
