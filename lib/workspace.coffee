@@ -60,10 +60,10 @@ parse_args = (args) ->
   else if args.length == 1
     for name in opt_names
       if name of args[0]
-        opts = args[0]
+        opts = args.shift()
         break
     unless opts
-      obj = args[0]
+      obj = args.shift()
       opts = {}
   else
     opts = {}
