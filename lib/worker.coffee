@@ -99,6 +99,7 @@ class Worker
   get: (args...) ->
     return @defer_get(args) if @in_each
     { prefix, opts, key } = @parse_args args
+    # console.log key # XXX
     cached = @check_cache(key)
     return cached if cached != undefined
     @deps.push key
