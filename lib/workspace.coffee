@@ -48,7 +48,7 @@ class Workspace
   toString: ->
     "<Workspace: #{@worker().prefix}>"
 
-opt_names = ['sticky', 'as', 'namespace']
+opt_names = ['sticky', 'as', 'namespace', 'str'] # str is for MyDate...
 
 parse_args = (args) ->
   callback = _.callback args
