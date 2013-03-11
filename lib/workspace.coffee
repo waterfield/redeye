@@ -48,11 +48,13 @@ class Workspace
   toString: ->
     "<Workspace: #{@worker().prefix}>"
 
-opt_names = ['sticky', 'as', 'namespace', 'str'] # str is for MyDate...
+opt_names = ['sticky', 'as', 'namespace']
 
 parse_args = (args) ->
   callback = _.callback args
   if typeof(args[0]) != 'object'
+    opts = _.opts args
+  else if args[0]?.isMyDate
     opts = _.opts args
   else if args.length > 1
     opts = _.opts args
