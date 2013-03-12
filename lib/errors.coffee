@@ -7,7 +7,7 @@ class DependencyError extends Error
     trace = @stack
     { key, manager } = @worker
     { slice } = manager
-    @tail.unshift { trace, key, slice }
+    @tail.push { trace, key, slice }
 
   get_tail: -> @tail
 
