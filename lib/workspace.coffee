@@ -27,8 +27,7 @@ class Workspace
     params = manager.params[prefix]
     obj = {} if params && !obj && !args.length
     if obj
-      wat = JSON.stringify({ args, obj, opts, prefix })
-      throw new Error "No parameters defined for '#{prefix}'; #{wat}" unless params
+      throw new Error "No parameters defined for '#{prefix}'" unless params
       root = Worker.current.workspace
       args = for param in params
         if typeof(param) == 'object'
