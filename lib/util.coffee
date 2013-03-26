@@ -2,6 +2,9 @@ _ = require 'underscore'
 
 _.mixin
 
+  compact: (list) ->
+    _(list).select (item) -> item?
+
   opts: (args) ->
     if !args.length
       {}
