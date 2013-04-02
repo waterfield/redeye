@@ -8,6 +8,7 @@ Cache = require './cache'
 pool = require './pool'
 util = require 'util'
 scripts = require './scripts'
+stats = require './stats'
 _ = require './util'
 
 # The manager creates and handles `Worker` objects.
@@ -166,6 +167,7 @@ class Manager extends EventEmitter2
     @emit label, payload
     payload = msgpack.pack payload
     @db.publish label, payload
+    stats.increment "events.#{label.split(':').join('.')}"
 
   # Set up listeners for the given dependencies, such that when all
   # of them are satisfied, the worker for the key is resumed.
