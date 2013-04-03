@@ -142,7 +142,7 @@ class Manager extends EventEmitter2
     @db.evalsha @scripts.require, 0, queue, target, sources..., (err, arr) =>
       return @error err if err
       if arr.shift().toString() == 'cycle'
-        return callback(new CycleError [target, arr...])
+        return callback(new CycleError [arr..., target])
       values = for buf in arr
         msgpack.unpack(buf) if buf
       for source in sources
