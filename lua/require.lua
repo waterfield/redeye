@@ -21,7 +21,7 @@
 -- Outputs
 --
 --   ['ok', value1, value2, ...]
---   ['cycle', source1, source2, ...]
+--   ['cycle', key1, key2, ...]
 --
 -- What is going on with this code
 --
@@ -40,11 +40,9 @@
 local queue  = ARGV[1]
 local target = ARGV[2]
 local values = {'ok'}
-local cycles = {'cycle'}
 local locks = {}
-local ncycles = 0
 
--- :(
+-- :'(
 if target == 'null' then
   target = nil
 end
@@ -58,12 +56,12 @@ if target then
   while ARGV[index + 2] do
     -- initial stack consists of just the source key
     local source = ARGV[index + 2]
-    local stack = {source}
-    local len = 1
+    local stack = {'cycle', source}
+    local len = 2
     local visited = {}
     local first = true
     -- loop until all keys are visited
-    while len > 0 do
+    while len > 1 do
       -- grab the key's value and lock
       local key = stack[len]
       len = len - 1
@@ -82,13 +80,9 @@ if target then
         -- loop over the key's dependencies
         local deps = redis.call('smembers', 'sources:'..key)
         for _, dep in ipairs(deps) do
-          -- if the dependency is the target, it's a cycle, so
-          -- bump the cycle count and record the source as causing it
+          -- if the dependency is the target, it's a cycle, so return
           if dep == target then
-            ncycles = ncycles + 1
-            cycles[ncycles + 1] = source
-            len = 0
-            break
+            return stack
           -- otherwise, visit the dependency unless we have already
           elseif not visited[dep] then
             len = len + 1
@@ -110,11 +104,6 @@ else
     locks[key] = lock
     index = index + 1
   end
-end
-
--- if we had any cycles, return them with the 'cycle' status
-if ncycles > 0 then
-  return cycles
 end
 
 -- no cycles, so loop through sources again

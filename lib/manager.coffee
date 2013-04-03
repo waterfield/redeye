@@ -142,21 +142,12 @@ class Manager extends EventEmitter2
     @db.evalsha @scripts.require, 0, queue, target, sources..., (err, arr) =>
       return @error err if err
       if arr.shift().toString() == 'cycle'
-        source = arr[0].toString() # NOTE: there may be more!
-        err = new CycleError [target, source]
-        return callback err
+        return callback(new CycleError [target, arr...])
       values = for buf in arr
         msgpack.unpack(buf) if buf
       for source in sources
         @log null, 'redeye:require', { source, target }
       callback null, values
-
-  # Called by a worker when it has failed to recover from a cycle error.
-  # Propagate that error and remove the worker with prejudice.
-  cycle: (key, err) ->
-    msg = 'cycle|' + err.cycle.join('|')
-    @db.publish 'control', msg
-    @remove_worker key, true
 
   # Log a message. Each message type has its own channel.
   log: (key, label, payload) ->
@@ -326,23 +317,6 @@ class Manager extends EventEmitter2
         @remove_worker key
       @handle.ready.apply @, [key, true]
 
-    # A cycle was detected at some point. If we have any keys listening
-    # as the next node on the cycle, create a new cycle error and let the
-    # worker try to resume. If the worker can't catch the error, it will
-    # call our main `@cycle` method and the error will be propogated around
-    # the cycle. Meanwhile, the listeners should remove the cycle as a
-    # source, in case they do catch the cycle error.
-    cycle: (cycle...) ->
-      return unless keys = @listeners[cycle[0]]
-      delete @listeners[cycle[0]]
-      m = @db.multi()
-      for key in keys
-        err = new CycleError [key, cycle...]
-        @resume key, false, err
-        m.srem 'sources:'+key, cycle[0]
-      m.exec (err) =>
-        @error err if err
-
     # A key was completed. If we have any listeners for that key,
     # decrement their trigger count. If they have no remaining listeners,
     # resume that key. It will then grab its dependency values from
@@ -359,7 +333,7 @@ class Manager extends EventEmitter2
   # Remove the given key from our memory (it is  still up to the worker
   # to make sure internal references are erased). If the `with_prejudice`
   # flag is provided, eliminate all trace of the worker from the database
-  # as well. This will happen when a worker fails cycle recovery.
+  # as well.
   remove_worker: (key, with_prejudice) ->
     return unless worker = @workers[key]
     delete @triggers[key]

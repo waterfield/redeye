@@ -51,9 +51,6 @@ class CycleError extends Error
     @name = 'CycleError'
     Error.captureStackTrace @, @constructor
 
-  complete: ->
-    @cycle[0] == @cycle[@cycle.length - 1]
-
   tail: ->
     [{ trace: @stack, key: @cycle[0] }]
 

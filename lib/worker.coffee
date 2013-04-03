@@ -91,11 +91,6 @@ class Worker
   # Both kinds of errors can be caught and handled normally. Dependency
   # errors are stored as the result of this key, and include a full backtrace
   # through all workers' stacks.
-  #
-  # A cycle error, if not caught, is propagated to the next worker up
-  # the dependency chain, to see if that worker can catch it. If no worker
-  # can catch it, the last worker will store the cycle error as a normal
-  # dependency error, which can be propagated normally in a stack trace.
   get: (args...) ->
     return @defer_get(args) if @in_each
     { prefix, opts, key } = @parse_args args
@@ -330,22 +325,15 @@ class Worker
   # suitable for exception bubbling, then set that error as the
   # result of this key with `@finish`.
   error: (err) ->
-    if err.cycle
-      if err.complete()
-        @finish error: err.tail()
-      else
-        @implode()
-        @manager.cycle @key, err
-    else
-      trace = err.stack ? err
-      slice = @manager.slice
-      error = err.get_tail?() ? [{ trace, @key, slice }]
-      @finish { error }
+    trace = err.stack ? err
+    slice = @manager.slice
+    error = err.get_tail?() ? [{ trace, @key, slice }]
+    @finish { error }
 
   # Parse the @get arguments into the prefix, key arguments,
   # and options.
   parse_args: (args) ->
-    @on_cycle = _.callback args
+    _.callback args
     opts = _.opts args
     key = args.join ':'
     namespace = opts.namespace
