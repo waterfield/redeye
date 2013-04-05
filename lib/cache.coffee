@@ -1,12 +1,9 @@
-_ = require './util'
-stats = require('./stats').getChildClient('cache')
+_ = require 'underscore'
 
 class Cache
 
   constructor: (opts = {}) ->
     { @max_items } = opts
-    @lru_size = 0
-    @sticky_size = 0
     unless @max_memory || @max_items
       throw new Error "Must specify some kind of size limit"
     @reset()
@@ -16,49 +13,55 @@ class Cache
     @map = {}
     @head = new CacheItem
     @head.next = @head.prev = @head
+    @stats =
+      lru_items: 0
+      sticky_items: 0
+      lru_hits: 0
+      sticky_hits: 0
+      misses: 0
+      added: 0
+      removed: 0
 
   add: (key, value, sticky = false) ->
     return item.get() if item = (@sticky[key] || @map[key])
     item = new CacheItem key, value
-    stats.increment 'add'
     if sticky
+      @stats.sticky_items++
       @sticky[key] = item
-      @sticky_size++
       return item.get()
     @shrink()
-    @lru_size++
     item.add_after @head
+    @stats.lru_items++
+    @stats.added++
     @map[key] = item
-    @gauge_size()
     item.get()
 
   remove: (key) ->
     if item = @map[key]
       delete @map[key]
       item.remove()
-      stats.increment 'remove'
-      @lru_size--
-      @gauge_size()
+      @stats.lru_items--
+      @stats.removed++
       item.value
 
   get: (key) ->
     if (item = @sticky[key]) != undefined
-      stats.increment 'hit'
+      @stats.sticky_hits++
       item.get()
     else if item = @map[key]
       item.hits++
-      stats.increment 'hit'
+      @stats.lru_hits++
       unless item == @head.next
         item.remove()
         item.add_after @head
       item.get()
     else
-      stats.increment 'miss'
+      @stats.misses++
       undefined
 
   shrink: ->
     while true
-      break if @max_items && (@lru_size < @max_items)
+      break if @max_items && (@stats.lru_items < @max_items)
       @remove @head.prev.key
 
   keys: ->
@@ -66,10 +69,6 @@ class Cache
     while (item = next) != @head
       next = item.next
       item.key
-
-  gauge_size: ->
-    stats.gauge 'size.lru', @lru_size
-    stats.gauge 'size.sticky', @sticky_size
 
 class CacheItem
 
