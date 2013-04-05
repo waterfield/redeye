@@ -507,6 +507,8 @@ class Worker
     for arg, index in @args
       if int_re.test(arg)
         @args[index] = parseInt(arg)
+      else if arg == ''
+        @args[index] = null
 
   # Pack a hash into an array using a list of fields in order.
   pack_fields: (hash, fields) ->
