@@ -88,6 +88,49 @@ delete_keys = ->
     console.log "No keys to delete"
     rerun()
 
+explicit_inputs = [
+  'accrual.id_to_anchor'
+  'accrual.anchor_to_id'
+  'accrual.id_to_id'
+  'accrual.asset_calc'
+  'accrual.calc_summary'
+  'accrual.accrual_recovery'
+  'accrual.level_analysis'
+  'accrual.groups_for_meter'
+  'accrual.meters_for_group'
+  'accrual.nearby_meters'
+  'accrual.primary_meters'
+  'accrual.secondary_meters'
+  'accrual.asset_contracts'
+  'accrual.batch_process'
+  'accrual.prior_production_date'
+  'accrual.latest_accounting_date'
+  'accrual.primaries_for_secondary'
+  'accrual.secondary_for_primary'
+  'accrual.meter_gas_types'
+  'accrual.secondary_gas_types'
+  'accrual.tailgate_gas_types'
+  'accrual.tailgate'
+  'accrual.index_scenario'
+  'accrual.index_scenario_item'
+  'accrual.asset_scenario'
+  'accrual.asset_scenario_item'
+  'accrual.ca_percent'
+  'accrual.meters_for_contract'
+  'accrual.code_tables'
+  'accrual.volume_curves'
+  'accrual.decline_curves'
+  'accrual.decline_curve_items'
+  'accrual.meter'
+  'accrual.contract'
+  'accrual.product_terms'
+  'accrual.wh_term'
+  'accrual.fee_terms'
+  'accrual.asset'
+  'accrual.forecast'
+  'accrual.rate'
+]
+
 # Find out what keys are intermediate and what is the seed,
 # then call `delete_keys`.
 scan_db = ->
@@ -101,7 +144,7 @@ scan_db = ->
           throw err if err
           r.scard "sources:#{key}", (err, sources) ->
             throw err if err
-            if sources || (prefix == 'one_shot_cashout')
+            if (sources && !(prefix in explicit_inputs)) || (prefix == 'one_shot_cashout')
               seed ?= key unless targets
               to_delete.push key
               to_delete.push 'lock:'+key
