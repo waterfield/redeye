@@ -154,7 +154,7 @@ class Manager extends EventEmitter2
     return unless label and payload
     payload.key = key if key
     payload.slice = @slice if @slice
-    console.log label, payload if @verbose
+    console.log new Date().getTime(), @slice, label, payload if @verbose
     @emit label, payload
     payload = msgpack.pack payload
     @db.publish label, payload
