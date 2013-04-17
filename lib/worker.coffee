@@ -299,7 +299,7 @@ class Worker
     return @implode() if @dirty
     value = value?.toJSON?() ? value
     if pack = @manager.opts[@prefix]?.pack
-      value = @pack_fields value, pack if value
+      value = @pack_fields value, pack if value && !value.error
     value = msgpack.pack value
     @manager.finish @id, @key, value, (ok) =>
       if ok

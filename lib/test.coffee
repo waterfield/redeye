@@ -182,7 +182,7 @@ get = (args...) ->
   db.get key, (err, buf) ->
     obj = msgpack.unpack(buf) if buf
     if pack = manager.opts[prefix]?.pack
-      obj = unpack_fields obj, pack if obj
+      obj = unpack_fields obj, pack if obj && !obj.error
     debug 'run from get'
     fiber.run [err, obj]
   debug 'yield from get'
