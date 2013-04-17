@@ -55,14 +55,18 @@ rerun = ->
       throw err if err
       value = msgpack.unpack(buf) if buf
       console.log 'Done. Got:', value
-      r.lrange 'errors', 0, 0, (err, list) ->
+      r.get 'fatal', (err, fatal) ->
         throw err if err
-        if list.length
-          err = JSON.parse list[0].toString()
-          console.log "An error:", err
-        else
-          console.log "No errors!"
-        r.end()
+        r.lrange 'errors', 0, 0, (err, list) ->
+          throw err if err
+          if fatal
+            console.log "Fatal:", fatal
+          else if list.length
+            err = JSON.parse list[0].toString()
+            console.log "An error: #{err.handle}: #{err.message}"
+          else
+            console.log "No errors!"
+          r.end()
 
 listen_for_completion = ->
   manager.request seed
@@ -142,14 +146,17 @@ scan_db = ->
       do (key, prefix) ->
         r.scard "targets:#{key}", (err, targets) ->
           throw err if err
-          r.scard "sources:#{key}", (err, sources) ->
-            throw err if err
-            if (sources && !(prefix in explicit_inputs)) || (prefix == 'one_shot_cashout')
-              seed ?= key unless targets
-              to_delete.push key
-              to_delete.push 'lock:'+key
-              to_delete.push 'sources:'+key
-              to_delete.push 'targets:'+key
-            next()
+          do (targets) ->
+            r.scard "sources:#{key}", (err, sources) ->
+              throw err if err
+              if (sources && !(prefix in explicit_inputs)) || (prefix == 'one_shot_cashout')
+                unless targets
+                  # console.log 'Potential seed:', key, { sources, targets } # XXX
+                  seed ?= key
+                to_delete.push key
+                to_delete.push 'lock:'+key
+                to_delete.push 'sources:'+key
+                to_delete.push 'targets:'+key
+              next()
 
 scan_db()

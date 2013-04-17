@@ -30,6 +30,7 @@ class Manager extends EventEmitter2
     @triggers = {}
     @task_intervals = []
     @cache = new Cache max_items: @max_cache_items
+    @diag_interval = setInterval (=> console.log @diagnostic()), 5000
 
   # UTILITY METHODS
   # ===============
@@ -281,6 +282,7 @@ class Manager extends EventEmitter2
     @_quit = true
     @clear_tasks()
     clearTimeout @heartbeat_timeout
+    clearInterval @diag_interval
     m = @db.multi()
     m.del 'heartbeat:'+@id
     for key, worker of @workers

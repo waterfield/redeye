@@ -144,15 +144,21 @@ wait = (time) ->
   yield()
 
 # Mimics functionality of Manager#pack, for packed-form keys
-pack_fields = (hash, fields) ->
-  hash[field] for field in fields
+pack_fields = (obj, fields) ->
+  if _.isArray obj
+    pack_fields(elem, fields) for elem in obj
+  else
+    obj[field] for field in fields
 
 # Mimics functionality of Manager#unpack, for packed-form keys
-unpack_fields = (array, fields) ->
-  hash = {}
-  for field, index in fields
-    hash[field] = array[index]
-  hash
+unpack_fields = (obj, fields) ->
+  if _.isArray obj[0]
+    unpack_fields(elem, fields) for elem in obj
+  else
+    hash = {}
+    for field, index in fields
+      hash[field] = obj[index]
+    hash
 
 # Convert an asynchronous operation into a synchronous one.
 # You must use this if you want to do something asynchronous
@@ -176,7 +182,7 @@ get = (args...) ->
   db.get key, (err, buf) ->
     obj = msgpack.unpack(buf) if buf
     if pack = manager.opts[prefix]?.pack
-      obj = unpack_fields obj, pack
+      obj = unpack_fields obj, pack if obj
     debug 'run from get'
     fiber.run [err, obj]
   debug 'yield from get'
@@ -190,7 +196,7 @@ set = (args..., value) ->
   key = args.join ':'
   prefix = key.split(':')[0]
   if pack = manager.opts[prefix]?.pack
-    value = pack_fields value, pack
+    value = pack_fields value, pack if value
   buf = msgpack.pack value
   db.multi()
     .set(key, buf)
