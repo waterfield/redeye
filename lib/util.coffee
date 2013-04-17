@@ -21,6 +21,8 @@ _.mixin
       return false if elem
     true
 
+  sort: (arr) -> arr.sort()
+
   callback: (args) ->
     if typeof(args[args.length - 1]) == 'function'
       args.pop()
