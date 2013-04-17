@@ -9,7 +9,7 @@ slice = argv.s ? process.env['SLICE'] ? 2
 r = redis.createClient port, host, return_buffers: true
 r.select slice
 
-r.get process.argv[2], (err, buf) ->
+r.get argv._[0], (err, buf) ->
   throw err if err
   console.log msgpack.unpack(buf)
   r.end()
