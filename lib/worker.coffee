@@ -299,7 +299,7 @@ class Worker
     return @implode() if @dirty
     value = value?.toJSON?() ? value
     if pack = @manager.opts[@prefix]?.pack
-      value = @pack_fields value, pack
+      value = @pack_fields value, pack if value && !value.error
     value = msgpack.pack value
     @manager.finish @id, @key, value, (ok) =>
       if ok
@@ -412,7 +412,7 @@ class Worker
     return value unless value?
     @test_for_error value
     if pack = @manager.opts[prefix]?.pack
-      value = @unpack_fields value, pack
+      value = @unpack_fields value, pack if value
     if wrapper = opts.as || @manager.opts[prefix]?.as
       new wrapper(value)
     else
@@ -510,15 +510,21 @@ class Worker
       else if arg == ''
         @args[index] = null
 
-  # Pack a hash into an array using a list of fields in order.
-  pack_fields: (hash, fields) ->
-    hash[field] for field in fields
+  # Pack a hash or array of hashes into an array using a list of fields in order.
+  pack_fields: (obj, fields) ->
+    if _.isArray obj
+      @pack_fields(elem, fields) for elem in obj
+    else
+      obj[field] for field in fields
 
-  # Unpack a list of values into a hash given a list of fields.
+  # Unpack a list of values into a hash or array of hashes given a list of fields.
   unpack_fields: (array, fields) ->
-    hash = {}
-    for field, index in fields
-      hash[field] = array[index]
-    hash
+    if _.isArray array[0]
+      @unpack_fields(elem, fields) for elem in array
+    else
+      hash = {}
+      for field, index in fields
+        hash[field] = array[index]
+      hash
 
 module.exports = Worker
