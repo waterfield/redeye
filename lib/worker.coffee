@@ -391,7 +391,7 @@ class Worker
           undefined
       @waiting_for = null
       if err
-        @resume "#{@key} expected finished keys but got nulls: #{err.join ','}"
+        @resume "PLEASE CONTACT WATERFIELD ENERGY DEV TEAM ABOUT THIS ERROR\n#{@key} expected finished keys but got nulls: #{err.join ','}"
       else
         @resume null, arr
 
