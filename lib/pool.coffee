@@ -10,7 +10,7 @@ interval = null
 
 gauge = ->
   stats.gauge 'size', pool.getPoolSize()
-  stats.gauge 'available', pool.getAvailableObjectsCount()
+  stats.gauge 'available', pool.availableObjectsCount()
   stats.gauge 'waiting', pool.waitingClientsCount()
 
 module.exports = (opts) ->
