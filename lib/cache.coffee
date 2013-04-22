@@ -1,4 +1,5 @@
-_ = require 'underscore'
+_ = require './util'
+stats = require('./stats').getChildClient('cache')
 
 class Cache
 
@@ -9,59 +10,59 @@ class Cache
     @reset()
 
   reset: ->
+    @lru_size = 0
+    @sticky_size = 0
     @sticky = {}
     @map = {}
     @head = new CacheItem
     @head.next = @head.prev = @head
-    @stats =
-      lru_items: 0
-      sticky_items: 0
-      lru_hits: 0
-      sticky_hits: 0
-      misses: 0
-      added: 0
-      removed: 0
+
+  gauge_size: =>
+    stats.gauge 'size.lru', @lru_size
+    stats.gauge 'size.sticky', @sticky_size
 
   add: (key, value, sticky = false) ->
     return item.get() if item = (@sticky[key] || @map[key])
+    stats.increment 'add'
     item = new CacheItem key, value
     if sticky
-      @stats.sticky_items++
+      @sticky_size++
       @sticky[key] = item
-      return item.get()
-    @shrink()
-    item.add_after @head
-    @stats.lru_items++
-    @stats.added++
-    @map[key] = item
+    else
+      @shrink()
+      item.add_after @head
+      @lru_size++
+      @map[key] = item
+    @gauge_size()
     item.get()
 
   remove: (key) ->
     if item = @map[key]
       delete @map[key]
       item.remove()
-      @stats.lru_items--
-      @stats.removed++
+      @lru_size--
+      stats.increment 'remove'
+      @gauge_size()
       item.value
 
   get: (key) ->
     if (item = @sticky[key]) != undefined
-      @stats.sticky_hits++
+      stats.increment 'hit'
       item.get()
     else if item = @map[key]
       item.hits++
-      @stats.lru_hits++
+      stats.increment 'hit'
       unless item == @head.next
         item.remove()
         item.add_after @head
       item.get()
     else
-      @stats.misses++
+      stats.increment 'miss'
       undefined
 
   shrink: ->
     while true
-      break if @max_items && (@stats.lru_items < @max_items)
+      break if @max_items && (@lru_size < @max_items)
       @remove @head.prev.key
 
   keys: ->

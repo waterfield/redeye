@@ -174,6 +174,7 @@ class Manager extends EventEmitter2
   finish: (id, key, value, callback) ->
     @db.evalsha @scripts.finish, 0, @control, id, @id, key, value, (err, set) =>
       delete @workers[key]
+      @gauge_num_workers()
       @log(key, 'redeye:finish', {}) if set
       callback set
 
@@ -256,6 +257,7 @@ class Manager extends EventEmitter2
       try
         @workers[key] = new Worker id, key, queue, sources, this
         @workers[key].run()
+        @gauge_num_workers()
       catch e
         @error e
       @safely_pop_next()
@@ -296,11 +298,10 @@ class Manager extends EventEmitter2
       @pool.release(@db); @db = null
       @pool.release(@sub); @sub = null
       @pool.release(@pop); @pop = null
-      @pool.drain =>
-        @pool.destroyAllNow =>
-          @emit 'quit'
-          @callback?()
-          @callback = null
+      @pool.quit =>
+        @emit 'quit'
+        @callback?()
+        @callback = null
 
   handle:
 
@@ -340,6 +341,7 @@ class Manager extends EventEmitter2
     return unless worker = @workers[key]
     delete @triggers[key]
     delete @workers[key]
+    @gauge_num_workers()
     if with_prejudice
       @db.multi()
         .del('lock:'+key)
@@ -377,6 +379,14 @@ class Manager extends EventEmitter2
   clear_tasks: ->
     for interval in @task_intervals
       clearInterval interval
+
+  gauge_num_workers: ->
+    stats.gauge 'workers', @num_workers()
+
+  num_workers: ->
+    count = 0
+    count++ for key of @workers
+    count
 
   # Mark that a fatal exception occurred
   error: (err) ->
