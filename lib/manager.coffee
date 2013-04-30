@@ -62,7 +62,7 @@ class Manager extends EventEmitter2
     @connect (err) =>
       throw err if err
       finish = =>
-        @repeat_task 'orphan', 10, => @check_for_orphans()
+        # @repeat_task 'orphan', 10, => @check_for_orphans()
         @heartbeat()
         @listen()
         @emit 'ready'
