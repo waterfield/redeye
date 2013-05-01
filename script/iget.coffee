@@ -1,12 +1,12 @@
 msgpack = require 'msgpack'
 redis = require 'redis'
 
-global.data = {}
 r = redis.createClient 6379, 'localhost', return_buffers: true
 
-global.get = (key, slice=global.slice) ->
-  r.select slice if slice?
+global.select = (slice) -> r.select slice
 
+global.get = (args...) ->
+  key = args.join ':'
   r.get key, (err, buf) ->
     throw err if err
-    global.data = msgpack.unpack(buf)
+    global.data = global[args[0]] = msgpack.unpack(buf)
