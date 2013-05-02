@@ -30,7 +30,7 @@ class Manager extends EventEmitter2
     @triggers = {}
     @task_intervals = []
     @cache = new Cache max_items: @max_cache_items
-    @diag_interval = setInterval (=> console.log @diagnostic()), 5000
+    # @diag_interval = setInterval (=> console.log @diagnostic()), 5000 # we will handle orphans differently in the future.
 
   # UTILITY METHODS
   # ===============
