@@ -133,6 +133,8 @@ explicit_inputs = [
   'accrual.asset'
   'accrual.forecast'
   'accrual.rate'
+  'accrual.count_tailgates'
+  'accrual.tailgate'
 ]
 
 # Find out what keys are intermediate and what is the seed,
