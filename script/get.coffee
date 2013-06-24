@@ -27,6 +27,7 @@ manager = new FakeManager
 require(argv.w).init(manager) if argv.w?
 
 unpack_fields = (array, fields) ->
+  return array unless array
   if _.isArray array[0]
     unpack_fields(elem, fields) for elem in array
   else
