@@ -141,7 +141,7 @@ wait = (time) ->
     fiber.run()
   ), time
   debug 'yield from wait'
-  yield()
+  Fiber.yield()
 
 # Mimics functionality of Manager#pack, for packed-form keys
 pack_fields = (obj, fields) ->
@@ -170,7 +170,7 @@ unpack_fields = (obj, fields) ->
 async = (callback) ->
   callback (err, value) ->
     fiber.run [err, value]
-  [err, value] = yield()
+  [err, value] = Fiber.yield()
   throw err if err
   value
 
@@ -186,7 +186,7 @@ get = (args...) ->
     debug 'run from get'
     fiber.run [err, obj]
   debug 'yield from get'
-  [err, obj] = yield()
+  [err, obj] = Fiber.yield()
   throw err if err
   obj
 
@@ -205,7 +205,7 @@ set = (args..., value) ->
       debug 'run from set'
       fiber.run err
   debug 'yield from set'
-  err = yield()
+  err = Fiber.yield()
   throw err if err
   null
 
@@ -446,14 +446,14 @@ run_setup = ->
     debug 'run when manager quits'
     fiber.run()
   debug 'wait for manager ready'
-  yield()
+  Fiber.yield()
   try
     setup() for setup in the_test.setups
   catch err
     fail err
     manager.quit()
   debug 'wait for manager quit'
-  yield() if requested
+  Fiber.yield() if requested
 
 # Go get a certain key and compare it to the given expected value.
 # If only called with one argument, the key is assumed to be the
@@ -489,7 +489,7 @@ request = (args...) ->
     debug 'run from request'
     fiber.run err
   debug 'yield from request'
-  err = yield()
+  err = Fiber.yield()
   throw err if err
   null
 

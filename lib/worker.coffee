@@ -133,7 +133,7 @@ class Worker
   # thrown from inside the fiber in order to create sensible stack traces.
   yield: ->
     Worker.current = null
-    [ err, value ] = yield()
+    [ err, value ] = Fiber.yield()
     throw err if err
     value
 
