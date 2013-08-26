@@ -484,7 +484,11 @@ cover = ->
   cov = (global || window)._$jscoverage || {}
   Object.keys(cov).forEach (filename) ->
       data = cov[filename]
-      console.log 'SF:' + 'lib/' + filename
+      fileArray = filename.split('/')
+
+      console.log 'SF:' + filename if fileArray.length > 1
+      console.log 'SF:' + 'lib/' + filename unless fileArray.length > 1
+      
       data.source.forEach (line, num) ->
         num++
         if(data[num] != undefined)
