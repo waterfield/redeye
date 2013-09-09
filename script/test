@@ -1,11 +1,77 @@
 #!/bin/bash
 
-npm install
+files="`pwd`/test/*.coffee"
+options=""
 
-coffeeCoverage --path relative ./lib ./lib
+COVERALLS=true
+COVERAGE=false
+LINES=false
+EXECUTE=true
 
-bin/coffee lib/test.coffee -c \
-test/*.coffee \
-| \
-COVERALLS_REPO_TOKEN=bHAOkSWMqdodnZTDJ2Ox66OpRxjrbkP7X \
-coveralls
+function get_coverage {
+  if [ ! $coverage_output ] ; then
+    coverage_output=`bin/coffee lib/test.coffee $options $files`
+  fi
+}
+
+while test $# -gt 0; do
+  case "$1" in
+    -h|--help)
+      echo "test - continuous integration helper for valuation"
+      echo " "
+      echo "script/test [options]"
+      echo " "
+      echo "options:"
+      echo "-h, --help                show brief help"
+      echo "-c, --coverage            output lcov coverage to stdout"
+      echo "-l, --lines               output coverage line information"
+      echo "-d, --disable-coveralls   disable coveralls integration"
+      exit 0
+      ;;
+    -c|--coverage)
+      COVERAGE=true
+      EXECUTE=false
+      options="-c"
+      shift
+      ;;
+    -l|--lines)
+      LINES=true
+      EXECUTE=false
+      options="-c"
+      shift
+      ;;
+    -d|--disable-coveralls)
+      COVERALLS=false
+      shift
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+npm install &> logs/npm_install.log
+
+coffeeCoverage --path relative ./lib ./lib &> logs/coffcov_lib.log
+
+if $COVERAGE ; then
+  get_coverage
+  coverage_percent=`echo "$coverage_output" | awk -f script/coverage.awk`
+  echo "$coverage_percent" | awk '/[0-9]+%/ { print $2 }' | sed 's/%//g'
+fi
+
+if $COVERALLS ; then
+  get_coverage
+  echo "$coverage_output" | COVERALLS_REPO_TOKEN=bHAOkSWMqdodnZTDJ2Ox66OpRxjrbkP7X coveralls
+fi
+
+if $LINES ; then
+  get_coverage
+  coverage_info=`echo "$coverage_output" | awk -f script/coverage.awk`
+  echo "$coverage_info" | awk 'BEGIN {FS=":"} /[0-9]+$/ { print $2 }' | sed 's/ //g' | tr '\n' '/' | awk 'BEGIN{FS="/"} { print $2"/"$1 }'
+fi
+
+if $EXECUTE ; then
+  get_coverage
+  echo $coverage_output
+fi
