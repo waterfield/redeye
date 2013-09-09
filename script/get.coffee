@@ -1,13 +1,27 @@
 msgpack = require 'msgpack'
 redis = require 'redis'
-argv = require('optimist').argv
 _ = require '../lib/util'
 
-port = argv.p ? 6379
-host = argv.h ? 'localhost'
+opts = require('optimist')
+  .usage('Print packed values from redis.\n\nUsage: $0 "key or pattern"')
+  .boolean('n').alias('n', 'no-nulls').describe('n', 'ignore null and empty values')
+  .alias('p', 'port').default('p', 6379).describe('p', 'redis port')
+  .alias('h', 'host').default('h', 'localhost').describe('h', 'redis host')
+  .alias('s', 'slice').default('s', 2).describe('s', 'redis slice')
+  .alias('w', 'workers').describe('w', 'location of worker file(s)')
+  .boolean('help').describe('help', 'print this help')
+  .demand(1)
+
+{ argv } = opts
+if argv.help
+  opts.showHelp()
+  process.exit 0
+port = argv.p
+host = argv.h
 slice = argv.s ? process.env['SLICE'] ? 2
 
 packs = {}
+
 
 class FakeManager
   namespace: (namespace, body) ->
@@ -39,25 +53,67 @@ unpack_fields = (array, fields) ->
 r = redis.createClient port, host, return_buffers: true
 r.select slice
 
-get = (key) ->
-  prefix = key.split(':')[0]
+present = (value) ->
+  value && (!_.isArray(value) || value.length)
 
+get_keys = (pattern, callback) ->
+  r.keys pattern, (err, keys) ->
+    return callback(err) if err
+    keys = (key for key in keys when !(/^(sources|lock|targets):/.test key))
+    callback null, keys
+
+get = (key, callback) ->
+  prefix = key.split(':')[0]
   r.get key, (err, buf) ->
-    throw err if err
+    return callback(err) if err
     if buf
       value = msgpack.unpack buf
       if value && (fields = packs[prefix])?
         value = unpack_fields value, fields
-      console.log value
-      sources key
-    else
+      if present(value) || !argv.n
+        console.log "\n-- #{key} --\n"
+        console.log value
+        sources key, callback
+      else
+        callback()
+    else if !argv.n
+      console.log "\n-- #{key} --\n"
       console.log '<missing>'
+      callback()
+    else
+      callback()
 
-sources = (key) ->
+sources = (key, callback) ->
   r.smembers "sources:#{key}", (err, arr) ->
-    console.log "\nSources:"
-    for key in arr
-      console.log "  #{key}"
-    r.end()
+    return callback(err) if err
+    if arr.length
+      console.log "\n  Sources:"
+      for key in arr
+        console.log "    #{key}"
+    else
+      console.log "\n  No sources."
+    callback()
 
-get argv._[0]
+get_all = (pattern, callback) ->
+  get_keys pattern, (err, keys) ->
+    return callback(err) if err
+    if keys.length
+      console.log "#{keys.length} keys matched this pattern."
+      next = ->
+        if key = keys.shift()
+          get key.toString(), next
+        else
+          callback()
+      next()
+    else
+      console.log 'No keys matched this pattern.'
+      callback()
+
+finalize = (err) ->
+  r.end()
+  throw err if err
+
+if argv._[0].indexOf('*') >= 0
+  get_all argv._[0], finalize
+else
+  get argv._[0], finalize
