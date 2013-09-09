@@ -8,6 +8,9 @@
     "type": "git",
     "url": "git://github.com/waterfield/redeye.git"
   },
+  "scripts": {
+    "coveralls": "coffeecoverage ./lib ./lib && bin/coffee lib/test.coffee -c ./test/*.coffee | coveralls"
+  },
   "main": "package.js",
   "dependencies": {
     "coffee-script": "1.2",
@@ -19,6 +22,7 @@
     "node-uuid": "1.4",
     "generic-pool": "2.0",
     "eventemitter2": "0.4",
-    "optimist": "0.3"
+    "optimist": "0.3",
+    "coveralls": "~2.1.0"
   }
 }

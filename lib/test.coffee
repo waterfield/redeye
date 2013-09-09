@@ -22,6 +22,7 @@ argv = require('optimist').argv
 port = argv.p ? 6379
 host = argv.h ? '127.0.0.1'
 verbose = argv.v?
+coverage = argv.c?
 
 $ = {}
 ext = {}
@@ -373,7 +374,8 @@ run_next_test = ->
 # the database, kill the test-runner fiber, and exit the process
 # with an appropriate error code.
 finish_tests = ->
-  report()
+  report() unless coverage
+  cover() if coverage
   db.end()
   sub.end()
   fiber = null
@@ -477,6 +479,21 @@ report = ->
   console.log "#{passed} passed,",
               "#{failed} failed",
               "(#{passed + failed} total)"
+
+cover = ->
+  cov = (global || window)._$jscoverage || {}
+  Object.keys(cov).forEach (filename) ->
+      data = cov[filename]
+      fileArray = filename.split('/')
+
+      console.log 'SF:' + filename if fileArray.length > 1
+      console.log 'SF:' + 'lib/' + filename unless fileArray.length > 1
+      
+      data.source.forEach (line, num) ->
+        num++
+        if(data[num] != undefined)
+          console.log 'DA:' + num + ',' + data[num]
+      console.log 'end_of_record'
 
 # Set the requested key for the test. Every test can have at
 # most one. The manager will request the key on the job equeue,
