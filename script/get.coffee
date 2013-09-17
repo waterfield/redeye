@@ -10,6 +10,8 @@ opts = require('optimist')
   .alias('s', 'slice').default('s', 2).describe('s', 'redis slice')
   .alias('w', 'workers').describe('w', 'location of worker file(s)')
   .boolean('help').describe('help', 'print this help')
+  .string('e').alias('e', 'equal-to').describe('e', 'only select matching values')
+  .string('x').alias('x', 'not-equal-to').describe('x', 'only select NON-matching values')
   .demand(1)
 
 { argv } = opts
@@ -22,6 +24,8 @@ slice = argv.s ? process.env['SLICE'] ? 2
 
 packs = {}
 
+ne = JSON.parse(argv.x) if argv.x?
+eq = JSON.parse(argv.e) if argv.e?
 
 class FakeManager
   namespace: (namespace, body) ->
@@ -56,6 +60,17 @@ r.select slice
 present = (value) ->
   value && (!_.isArray(value) || value.length)
 
+accept = (value) ->
+  if present value
+    if ne?
+      !_.isEqual(ne, value)
+    else if eq?
+      _.isEqual(eq, value)
+    else
+      true
+  else
+    !argv.n
+
 get_keys = (pattern, callback) ->
   r.keys pattern, (err, keys) ->
     return callback(err) if err
@@ -70,7 +85,7 @@ get = (key, callback) ->
       value = msgpack.unpack buf
       if value && (fields = packs[prefix])?
         value = unpack_fields value, fields
-      if present(value) || !argv.n
+      if accept value
         console.log "\n-- #{key} --\n"
         console.log value
         sources key, callback
