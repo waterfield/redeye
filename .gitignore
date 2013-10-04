@@ -4,3 +4,4 @@ lib-cov
 docs
 .DS_Store
 lib/*.js
+coverage
