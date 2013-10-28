@@ -52,6 +52,7 @@ get = (key) ->
       sources key
     else
       console.log '<missing>'
+      r.end()
 
 sources = (key) ->
   r.smembers "sources:#{key}", (err, arr) ->
