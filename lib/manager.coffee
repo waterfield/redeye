@@ -130,10 +130,13 @@ class Manager extends EventEmitter2
     return value if value != undefined
     return (callback) =>
       if set = @helper_waiters[key]
+        console.log "manager: pushing callback (#{key})"
         set.push callback
       else
+        console.log "manager: primary helper (#{key})"
         @helper_waiters[key] = [callback]
         value = @run_helper(prefix, args)
+        console.log "manager: ran helper (#{key})"
         @helper_values[key] = value
         cb(value) for cb in @helper_waiters[key]
 
