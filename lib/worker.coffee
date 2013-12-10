@@ -363,6 +363,7 @@ class Worker
         if the_result != undefined
           console.log "worker: no need to yield (#{key})"
           return the_result
+        yielded = true
         console.log "worker: helper yielding (#{key})"
         v = Fiber.yield()
         console.log "worker: helper resumed (#{key})"
