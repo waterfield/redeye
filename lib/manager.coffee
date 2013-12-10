@@ -132,11 +132,10 @@ class Manager extends EventEmitter2
       if set = @helper_waiters[key]
         set.push callback
       else
-        @helper_waiters[key] = []
+        @helper_waiters[key] = [callback]
         value = @run_helper(prefix, args)
         @helper_values[key] = value
         cb(value) for cb in @helper_waiters[key]
-        callback(value)
 
   # WORKER-API METHODS
   # ==================
