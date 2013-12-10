@@ -1,5 +1,7 @@
 _ = require 'underscore'
 
+int_re = /^\d+$/
+
 _.mixin
 
   compact: (list) ->
@@ -12,6 +14,13 @@ _.mixin
       args.pop()
     else
       {}
+
+  standardize_args: (args) ->
+    for arg, index in args
+      if int_re.test(arg)
+        args[index] = parseInt(arg)
+      else if arg == ''
+        args[index] = null
 
   namespace: (str, ns) ->
     if ns then "#{str}_#{ns}" else str

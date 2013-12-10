@@ -3,8 +3,6 @@ msgpack = require 'msgpack'
 _ = require './util'
 { DependencyError, MultiError } = require './errors'
 
-int_re = /^\d+$/
-
 # One worker is constructed for every task coming
 # through the work queue(s). It maintains a local cache
 # of dependency values, a workspace for running the
@@ -348,6 +346,8 @@ class Worker
   check_cache: (key) ->
     if (cached = @cache[key]) != undefined
       cached
+    else if (cached = @manager.check_helpers(key)) != undefined
+      cached
     else if (cached = @manager.check_cache(key)) != undefined
       msg = source: key, target: @key
       msg.slice = @manager.slice if @manager.slice
@@ -504,11 +504,7 @@ class Worker
 
   # If any arguments look like integers, make them integers
   convert_args: ->
-    for arg, index in @args
-      if int_re.test(arg)
-        @args[index] = parseInt(arg)
-      else if arg == ''
-        @args[index] = null
+    _.standardize_args @args
 
   # Pack a hash or array of hashes into an array using a list of fields in order.
   pack_fields: (obj, fields) ->

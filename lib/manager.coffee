@@ -28,6 +28,8 @@ class Manager extends EventEmitter2
     @done = {}
     @listeners = {}
     @triggers = {}
+    @helpers = {}
+    @helper_values = {}
     @task_intervals = []
     @cache = new Cache max_items: @max_cache_items
     # @diag_interval = setInterval (=> console.log @diagnostic()), 5000 # we will handle orphans differently in the future.
@@ -91,6 +93,7 @@ class Manager extends EventEmitter2
     @params[prefix] = params if params.length
     @opts[prefix] = opts
     @runners[prefix] = runner
+    @helpers[prefix] = true if opts.helper
     Workspace.prototype[short_prefix] = (args...) -> @get short_prefix, args...
 
   # Declare a number of workers, all in a given namespace
@@ -117,8 +120,20 @@ class Manager extends EventEmitter2
       value = values[0] unless err
       callback?(err, value)
 
+  check_helpers: (key) ->
+    [prefix, args...] = key.split(':')
+    return undefined unless @helpers[prefix]
+    value = @helper_values[key]
+    return value if value != undefined
+    @helper_values[key] = @run_helper(prefix, args)
+
   # WORKER-API METHODS
   # ==================
+
+  run_helper: (prefix, args) ->
+    _.standardize_args args
+    workspace = new Worker.Workspace
+    @runners[prefix].apply workspace, args
 
   # Check our LRU cache to see if the given key is in it.
   check_cache: (key) ->
