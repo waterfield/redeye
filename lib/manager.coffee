@@ -30,6 +30,7 @@ class Manager extends EventEmitter2
     @triggers = {}
     @helpers = {}
     @helper_values = {}
+    @helper_waiters = {}
     @task_intervals = []
     @cache = new Cache max_items: @max_cache_items
     # @diag_interval = setInterval (=> console.log @diagnostic()), 5000 # we will handle orphans differently in the future.
@@ -54,6 +55,7 @@ class Manager extends EventEmitter2
   reset: ->
     @cache.reset()
     @helper_values = {}
+    @helper_waiters = {}
     @done = {}
 
   # API METHODS
@@ -126,7 +128,15 @@ class Manager extends EventEmitter2
     return undefined unless @helpers[prefix]
     value = @helper_values[key]
     return value if value != undefined
-    @helper_values[key] = @run_helper(prefix, args)
+    return (callback) =>
+      if set = @helper_waiters[key]
+        set.push callback
+      else
+        @helper_waiters[key] = []
+        value = @run_helper(prefix, args)
+        @helper_values[key] = value
+        cb(value) for cb in @helper_waiters[key]
+        callback(value)
 
   # WORKER-API METHODS
   # ==================

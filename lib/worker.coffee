@@ -346,8 +346,14 @@ class Worker
   check_cache: (key) ->
     if (cached = @cache[key]) != undefined
       cached
-    else if (cached = @manager.check_helpers(key)) != undefined
-      cached
+    else if (value = @manager.check_helpers(key)) != undefined
+      if typeof(value) == 'function'
+        value (callback) =>
+          callback (value) =>
+            @fiber.resume value
+        Fiber.yield()
+      else
+        value
     else if (cached = @manager.check_cache(key)) != undefined
       msg = source: key, target: @key
       msg.slice = @manager.slice if @manager.slice
