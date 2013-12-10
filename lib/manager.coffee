@@ -53,6 +53,7 @@ class Manager extends EventEmitter2
   # Reset the cache and list of done keys
   reset: ->
     @cache.reset()
+    @helper_values = {}
     @done = {}
 
   # API METHODS
