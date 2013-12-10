@@ -347,29 +347,30 @@ class Worker
     if (cached = @cache[key]) != undefined
       cached
     else if (value = @manager.check_helpers(key)) != undefined
-      console.log "worker: helper (#{key})"
+      wat = "#{@key} <- #{key}"
+      console.log "worker: helper (#{wat})"
       if typeof(value) == 'function'
-        console.log "worker: helper function (#{key})"
+        console.log "worker: helper function (#{wat})"
         yielded = false
         the_result = undefined
         value (result) =>
-          console.log "worker: helper callback (#{key})"
+          console.log "worker: helper callback (#{wat})"
           if yielded
-            console.log "worker: running fiber (#{key})"
+            console.log "worker: running fiber (#{wat})"
             @fiber.run result
           else
-            console.log "worker: no need to run fiber (#{key})"
+            console.log "worker: no need to run fiber (#{wat})"
             the_result = result
         if the_result != undefined
-          console.log "worker: no need to yield (#{key})"
+          console.log "worker: no need to yield (#{wat})"
           return the_result
         yielded = true
-        console.log "worker: helper yielding (#{key})"
+        console.log "worker: helper yielding (#{wat})"
         v = Fiber.yield()
-        console.log "worker: helper resumed (#{key})"
+        console.log "worker: helper resumed (#{wat})"
         v
       else
-        console.log "worker: helper value (#{key})"
+        console.log "worker: helper value (#{wat})"
         value
     else if (cached = @manager.check_cache(key)) != undefined
       msg = source: key, target: @key
