@@ -349,7 +349,7 @@ class Worker
     else if (value = @manager.check_helpers(key)) != undefined
       if typeof(value) == 'function'
         value (result) =>
-          @fiber.resume result
+          @fiber.run result
         Fiber.yield()
       else
         value
