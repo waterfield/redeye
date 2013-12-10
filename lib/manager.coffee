@@ -133,7 +133,7 @@ class Manager extends EventEmitter2
   run_helper: (prefix, args) ->
     _.standardize_args args
     workspace = new Worker.Workspace
-    workspace[param] = args[i] for param, i in @params[prefix]
+    workspace[param] = args[i] for param, i in (@params[prefix] ? [])
     @runners[prefix].apply workspace, args
 
   # Check our LRU cache to see if the given key is in it.
