@@ -350,9 +350,19 @@ class Worker
       console.log "worker: helper (#{key})"
       if typeof(value) == 'function'
         console.log "worker: helper function (#{key})"
+        yielded = false
+        the_result = undefined
         value (result) =>
           console.log "worker: helper callback (#{key})"
-          @fiber.run result
+          if yielded
+            console.log "worker: running fiber (#{key})"
+            @fiber.run result
+          else
+            console.log "worker: no need to run fiber (#{key})"
+            the_result = result
+        if the_result != undefined
+          console.log "worker: no need to yield (#{key})"
+          return the_result
         console.log "worker: helper yielding (#{key})"
         v = Fiber.yield()
         console.log "worker: helper resumed (#{key})"
