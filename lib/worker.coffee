@@ -362,11 +362,13 @@ class Worker
             console.log "worker: no need to run fiber (#{wat})"
             the_result = result
         if the_result != undefined
+          Worker.current = this
           console.log "worker: no need to yield (#{wat})"
           return the_result
         yielded = true
         console.log "worker: helper yielding (#{wat})"
         v = Fiber.yield()
+        Worker.current = this
         console.log "worker: helper resumed (#{wat})"
         v
       else
