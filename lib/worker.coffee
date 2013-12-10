@@ -348,9 +348,8 @@ class Worker
       cached
     else if (value = @manager.check_helpers(key)) != undefined
       if typeof(value) == 'function'
-        value (callback) =>
-          callback (value) =>
-            @fiber.resume value
+        value (result) =>
+          @fiber.resume result
         Fiber.yield()
       else
         value
