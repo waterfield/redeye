@@ -135,10 +135,15 @@ class Manager extends EventEmitter2
       else
         console.log "manager: primary helper (#{key})"
         @helper_waiters[key] = [callback]
-        value = @run_helper(prefix, args)
+        err = undefined
+        value = undefined
+        try
+          value = @run_helper(prefix, args)
+        catch e
+          err = e
         console.log "manager: ran helper (#{key})"
-        @helper_values[key] = value
-        cb(value) for cb in @helper_waiters[key]
+        @helper_values[key] = [err, value]
+        cb(err, value) for cb in @helper_waiters[key]
 
   # WORKER-API METHODS
   # ==================

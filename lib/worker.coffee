@@ -350,20 +350,23 @@ class Worker
       if typeof(value) == 'function'
         yielded = false
         the_result = undefined
-        value (result) =>
+        value (err, result) =>
           if yielded
-            @fiber.run result
+            @fiber.run([err, result])
           else
             the_result = result
         if the_result != undefined
           Worker.current = this
           return the_result
         yielded = true
-        v = Fiber.yield()
+        [e, v] = Fiber.yield()
         Worker.current = this
+        throw e if e
         v
       else
-        value
+        [e, v] = value
+        throw e if e
+        v
     else if (cached = @manager.check_cache(key)) != undefined
       msg = source: key, target: @key
       msg.slice = @manager.slice if @manager.slice
