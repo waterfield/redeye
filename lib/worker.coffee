@@ -354,10 +354,12 @@ class Worker
           if yielded
             @fiber.run([err, result])
           else
-            the_result = result
+            the_result = [err, result]
         if the_result != undefined
           Worker.current = this
-          return the_result
+          [e, v] = the_result
+          throw e if e
+          return v
         yielded = true
         [e, v] = Fiber.yield()
         Worker.current = this
