@@ -1,5 +1,6 @@
 msgpack = require 'msgpack'
 redis = require 'redis'
+util = require 'util'
 _ = require '../lib/util'
 
 opts = require('optimist')
@@ -87,7 +88,7 @@ get = (key, callback) ->
         value = unpack_fields value, fields
       if accept value
         console.log "\n-- #{key} --\n"
-        console.log value
+        console.log util.inspect(value, false, null, true)
         sources key, callback
       else
         callback()
