@@ -32,6 +32,15 @@ _.mixin
 
   sort: (arr) -> arr.sort()
 
+  gsub: (str, re, repl) ->
+    re = new RegExp(re) if _.isString(re)
+    out = ''
+    while m = re.exec str
+      out += str.slice(0, m.index)
+      out += m[0].replace re, repl
+      str = str.slice(m.index + m[0].length)
+    out + str
+
   callback: (args) ->
     if typeof(args[args.length - 1]) == 'function'
       args.pop()

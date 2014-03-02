@@ -3,6 +3,7 @@ uuid = require 'node-uuid'
 {EventEmitter2} = require 'eventemitter2'
 {CycleError} = require './errors'
 Workspace = require './workspace'
+Dependencies = require './dependencies'
 Worker = require './worker'
 Cache = require './cache'
 pool = require './pool'
@@ -33,6 +34,7 @@ class Manager extends EventEmitter2
     @helper_waiters = {}
     @task_intervals = []
     @cache = new Cache max_items: @max_cache_items
+    Manager.only = this
     # @diag_interval = setInterval (=> console.log @diagnostic()), 5000 # we will handle orphans differently in the future.
 
   # UTILITY METHODS
@@ -156,6 +158,7 @@ class Manager extends EventEmitter2
 
   # Check our LRU cache to see if the given key is in it.
   check_cache: (key) ->
+    return undefined if @_solo
     @cache.get key
 
   # Add an item to the LRU cache
@@ -166,7 +169,10 @@ class Manager extends EventEmitter2
   # Log that a dependency is being removed (because on a re-run of a dirty
   # key, a prior dependency was dropped).
   unrequire: (source, target) ->
-    @log null, 'redeye:unrequire', { source, target }
+    if @_solo
+      @deps.remove source, target
+    else
+      @log null, 'redeye:unrequire', { source, target }
 
   # The given target key is requesting these sources. Use `request.lua` to
   # try to satisfy these dependencies. If the script indicates a cycle, insert
@@ -174,6 +180,7 @@ class Manager extends EventEmitter2
   # the value(s) returned by the script, knowing that some of them may be
   # `null`, so the worker will then call `@wait` on us.
   require: (queue, sources, target, callback) ->
+    return @require_solo(sources, target, callback) if @_solo
     @db.evalsha @scripts.require, 0, queue, target, sources..., (err, arr) =>
       return @error err if err
       if arr.shift().toString() == 'cycle'
@@ -184,6 +191,15 @@ class Manager extends EventEmitter2
         @log null, 'redeye:require', { source, target }
       callback null, values
 
+  require_solo: (sources, target, callback) ->
+    for source in sources
+      if arr = @deps.cycle(source, target)
+        return callback(new CycleError [arr..., target])
+    values = @deps.require sources, target
+    values = for buf in values
+      msgpack.unpack(buf) if buf
+    callback null, values
+
   # Log a message. Each message type has its own channel.
   log: (key, label, payload) ->
     return unless label and payload
@@ -192,7 +208,7 @@ class Manager extends EventEmitter2
     console.log new Date().getTime(), @slice, label, payload if @verbose
     @emit label, payload
     payload = msgpack.pack payload
-    @db.publish label, payload
+    @db.publish label, payload unless @_solo
     stats.increment "events.#{label.split(':').join('.')}"
 
   # Set up listeners for the given dependencies, such that when all
@@ -206,10 +222,17 @@ class Manager extends EventEmitter2
   # A worker has finished with the given value, so use `finish.lua` to
   # attempt to wrap up the worker.
   finish: (id, key, value, callback) ->
+    return @finish_solo(key, value, callback) if @_solo
     @db.evalsha @scripts.finish, 0, @control, id, @id, key, value, (err, set) =>
       delete @workers[key]
       @log(key, 'redeye:finish', {}) if set
       callback set
+
+  finish_solo: (key, value, callback) ->
+    @deps.finish key, value
+    delete @workers[key]
+    @log key, 'redeye:finish', {}
+    callback true
 
   # INTERNAL METHODS
   # ================
@@ -248,6 +271,8 @@ class Manager extends EventEmitter2
 
   # Pop job message from the work queues and call `@job` to handle it;
   # some time later `@pop_next` will be called again.
+  #
+  # NOT USED WITH SOLO MODE
   pop_next: ->
     @pop.blpop @queues..., 0, (err, response) =>
       return @error err if err
@@ -263,6 +288,7 @@ class Manager extends EventEmitter2
   # if this manager dies for some reason. That way orphans in our active set
   # can be freed by some later manager and `orphans.lua`.
   heartbeat: ->
+    return if @_solo
     @db.setex "heartbeat:#{@id}", 10, 1
     @heartbeat_timeout = setTimeout (=> @heartbeat()), 5000
 
@@ -285,6 +311,8 @@ class Manager extends EventEmitter2
 
   # First `@claim` the key, then start a worker for the key and tell it to
   # run. Then, go back and wait for the next job on the work queues.
+  #
+  # NOT USED WITH SOLO MODE
   job: (queue, key) ->
     @claim key, (id, sources) =>
       try
@@ -335,6 +363,18 @@ class Manager extends EventEmitter2
           @emit 'quit'
           @callback?()
           @callback = null
+
+  solo: (turn_on) ->
+    return if turn_on == !!@_solo
+    if @_solo = turn_on
+      @deps = new Dependencies
+      @deps.on 'ready', (key) =>
+        @ready key, false
+      @deps.on 'job', (key) =>
+        @workers[key] = new Worker null, key, null, [], this
+        @workers[key].run()
+    else
+      @deps = null
 
   handle:
 

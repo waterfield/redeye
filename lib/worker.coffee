@@ -108,6 +108,8 @@ class Worker
   #
   # Search for the given keys in the database and return them.
   keys: (pattern) ->
+    if @manager._solo
+      return @manager.deps.keys(pattern)
     @async (callback) =>
       @db.keys pattern, callback
 
@@ -115,6 +117,12 @@ class Worker
   #
   # Atomically set the given key to a value.
   atomic: (key, value) ->
+    if @manager._solo
+      if @manager.deps.exists(key)
+        return 0
+      else
+        @manager.set key, value
+        return 1
     @async (callback) =>
       @db.multi()
         .setnx(key, value)
@@ -308,6 +316,7 @@ class Worker
   # We may have dropped some dependencies; in that case, remove us as a
   # target from the dropped ones.
   fix_source_targets: (callback) ->
+    return callback() if @manager._solo
     bad_deps = []
     for dep in @old_deps
       unless dep in @deps
@@ -344,6 +353,7 @@ class Worker
   # key. If found locally, just return it. If found in the LRU cache,
   # return it but also link as dependency. If not found, returns undefined.
   check_cache: (key) ->
+    return undefined if @manager._solo
     if (cached = @cache[key]) != undefined
       cached
     else if (value = @manager.check_helpers(key)) != undefined
@@ -385,6 +395,7 @@ class Worker
   # We built a fresh value from the database. Add it to our cache as
   # well as the manager's LRU cache.
   got: (prefix, key, value, opts) ->
+    return if @manager._solo
     @cache[key] = @manager.add_to_cache(prefix, key, value, opts.sticky)
 
   # Inform the manager of this dependency.
