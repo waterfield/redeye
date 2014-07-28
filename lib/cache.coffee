@@ -98,7 +98,9 @@ class CacheItem
     item.next = this
 
   get: (value = @value) ->
-    if _.isArray(value)
+    if !value || _.isString(value)
+      value
+    else if _.isArray(value)
       @get(item) for item in value
     else if _.isObject(value)
       @sub value

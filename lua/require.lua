@@ -21,7 +21,7 @@
 -- Outputs
 --
 --   ['ok', value1, value2, ...]
---   ['cycle', source1, source2, ...]
+--   ['cycle', key1, key2, ...]
 --
 -- What is going on with this code
 --
@@ -40,13 +40,39 @@
 local queue  = ARGV[1]
 local target = ARGV[2]
 local values = {'ok'}
-local cycles = {'cycle'}
 local locks = {}
-local ncycles = 0
 
--- :(
+-- :'(
 if target == 'null' then
   target = nil
+end
+
+-- Recursive search function.
+--   len: length of stack
+--   key: next key to search
+--   stack: key search stack
+--   visited: map of visited keys
+--   returns: whether a cycle was detected
+local function search(key, len, stack, visited)
+  len = len + 1
+  stack[len] = key
+  visited[key] = true
+  local value = redis.call('get', key)
+  local lock = redis.call('get', 'lock:'..key)
+  if lock and not value then
+    local deps = redis.call('smembers', 'sources:'..key)
+    for _, dep in ipairs(deps) do
+      if dep == target then
+        return true
+      elseif not visited[dep] then
+        if search(dep, len, stack, visited) then
+          return true
+        end
+      end
+    end
+  end
+  stack[len] = nil
+  return false
 end
 
 -- Don't bother checking for cycles unless the request specified
@@ -55,66 +81,16 @@ end
 if target then
   -- loop over source keys
   local index = 1
-  while ARGV[index + 2] do
-    -- initial stack consists of just the source key
-    local source = ARGV[index + 2]
-    local stack = {source}
-    local len = 1
-    local visited = {}
-    local first = true
-    -- loop until all keys are visited
-    while len > 0 do
-      -- grab the key's value and lock
-      local key = stack[len]
-      len = len - 1
-      local value = redis.call('get', key)
-      local lock = redis.call('get', 'lock:'..key)
-      -- if this is a source key, record the lock and value
-      if first then
-        locks[key] = lock
-        values[index + 1] = value
-        first = false
-      end
-      -- mark the key visited so we don't repeat it
-      visited[key] = true
-      -- stop iterating unless a cycle is even possible (see header)
-      if lock and not value then
-        -- loop over the key's dependencies
-        local deps = redis.call('smembers', 'sources:'..key)
-        for _, dep in ipairs(deps) do
-          -- if the dependency is the target, it's a cycle, so
-          -- bump the cycle count and record the source as causing it
-          if dep == target then
-            ncycles = ncycles + 1
-            cycles[ncycles + 1] = source
-            len = 0
-            break
-          -- otherwise, visit the dependency unless we have already
-          elseif not visited[dep] then
-            len = len + 1
-            stack[len] = dep
-          end
-        end
-      end
-    end
-    -- move on to the next source
-    index = index + 1
-  end
-else
-  local index = 1
+  local stack = {'cycle'}
   while ARGV[index + 2] do
     local key = ARGV[index + 2]
-    local value = redis.call('get', key)
-    local lock = redis.call('get', 'lock:'..key)
-    values[index + 1] = value
-    locks[key] = lock
+    values[index + 1] = redis.call('get', key)
+    locks[key] = redis.call('get', 'lock:'..key)
+    if search(key, 1, stack, {}) then
+      return stack
+    end
     index = index + 1
   end
-end
-
--- if we had any cycles, return them with the 'cycle' status
-if ncycles > 0 then
-  return cycles
 end
 
 -- no cycles, so loop through sources again

@@ -22,6 +22,7 @@ argv = require('optimist').argv
 port = argv.p ? 6379
 host = argv.h ? '127.0.0.1'
 verbose = argv.v?
+coverage = argv.c?
 
 $ = {}
 ext = {}
@@ -64,6 +65,8 @@ clone_context = ->
 deep_clone = (obj) ->
   if _.isArray(obj)
     _.map obj, deep_clone
+  else if obj == null
+    null
   else if typeof(obj) == 'object'
     clone = {}
     for own k, v of obj
@@ -139,18 +142,24 @@ wait = (time) ->
     fiber.run()
   ), time
   debug 'yield from wait'
-  yield()
+  Fiber.yield()
 
 # Mimics functionality of Manager#pack, for packed-form keys
-pack_fields = (hash, fields) ->
-  hash[field] for field in fields
+pack_fields = (obj, fields) ->
+  if _.isArray obj
+    pack_fields(elem, fields) for elem in obj
+  else
+    obj[field] for field in fields
 
 # Mimics functionality of Manager#unpack, for packed-form keys
-unpack_fields = (array, fields) ->
-  hash = {}
-  for field, index in fields
-    hash[field] = array[index]
-  hash
+unpack_fields = (obj, fields) ->
+  if _.isArray obj[0]
+    unpack_fields(elem, fields) for elem in obj
+  else
+    hash = {}
+    for field, index in fields
+      hash[field] = obj[index]
+    hash
 
 # Convert an asynchronous operation into a synchronous one.
 # You must use this if you want to do something asynchronous
@@ -162,7 +171,7 @@ unpack_fields = (array, fields) ->
 async = (callback) ->
   callback (err, value) ->
     fiber.run [err, value]
-  [err, value] = yield()
+  [err, value] = Fiber.yield()
   throw err if err
   value
 
@@ -173,12 +182,12 @@ get = (args...) ->
   prefix = key.toString().split(':')[0]
   db.get key, (err, buf) ->
     obj = msgpack.unpack(buf) if buf
-    if pack = manager.pack[prefix]
-      obj = unpack_fields obj, pack
+    if pack = manager.opts[prefix]?.pack
+      obj = unpack_fields obj, pack if obj && !obj.error
     debug 'run from get'
     fiber.run [err, obj]
   debug 'yield from get'
-  [err, obj] = yield()
+  [err, obj] = Fiber.yield()
   throw err if err
   obj
 
@@ -187,17 +196,17 @@ get = (args...) ->
 set = (args..., value) ->
   key = args.join ':'
   prefix = key.split(':')[0]
-  if pack = manager.pack[prefix]
-    value = pack_fields value, pack
+  if pack = manager.opts[prefix]?.pack
+    value = pack_fields value, pack if value
   buf = msgpack.pack value
   db.multi()
     .set(key, buf)
     .set('lock:'+key, 'ready')
-    .exec (err) =>
+    .exec (err, vals) =>
       debug 'run from set'
       fiber.run err
   debug 'yield from set'
-  err = yield()
+  err = Fiber.yield()
   throw err if err
   null
 
@@ -287,7 +296,7 @@ assert =
     if is_equal a, b
       pass()
     else
-      fail(msg + "\n" + diff_message(a, b))
+      fail(msg + "\n" + diff_message(b, a))
 
 # Compare two things for equality. Pass or fail the test based
 # on this, and print a recursive diff error. The 'key' argument
@@ -296,7 +305,10 @@ compare = (key, actual, expected) ->
   if arguments.length == 2
     [key, actual, expected] = [requested, key, actual]
   if !actual?
-    fail missing_message(key)
+    if !expected?
+      pass()
+    else
+      fail missing_message(key)
   else if actual.error
     fail error_message(key, actual.error)
   else
@@ -362,7 +374,8 @@ run_next_test = ->
 # the database, kill the test-runner fiber, and exit the process
 # with an appropriate error code.
 finish_tests = ->
-  report()
+  report() unless coverage
+  cover() if coverage
   db.end()
   sub.end()
   fiber = null
@@ -435,14 +448,14 @@ run_setup = ->
     debug 'run when manager quits'
     fiber.run()
   debug 'wait for manager ready'
-  yield()
+  Fiber.yield()
   try
     setup() for setup in the_test.setups
   catch err
     fail err
     manager.quit()
   debug 'wait for manager quit'
-  yield() if requested
+  Fiber.yield() if requested
 
 # Go get a certain key and compare it to the given expected value.
 # If only called with one argument, the key is assumed to be the
@@ -467,6 +480,21 @@ report = ->
               "#{failed} failed",
               "(#{passed + failed} total)"
 
+cover = ->
+  cov = (global || window)._$jscoverage || {}
+  Object.keys(cov).forEach (filename) ->
+      data = cov[filename]
+      fileArray = filename.split('/')
+
+      console.log 'SF:' + filename if fileArray.length > 1
+      console.log 'SF:' + 'lib/' + filename unless fileArray.length > 1
+      
+      data.source.forEach (line, num) ->
+        num++
+        if(data[num] != undefined)
+          console.log 'DA:' + num + ',' + data[num]
+      console.log 'end_of_record'
+
 # Set the requested key for the test. Every test can have at
 # most one. The manager will request the key on the job equeue,
 # and will begin calling expectation blocks only once the key
@@ -478,7 +506,7 @@ request = (args...) ->
     debug 'run from request'
     fiber.run err
   debug 'yield from request'
-  err = yield()
+  err = Fiber.yield()
   throw err if err
   null
 

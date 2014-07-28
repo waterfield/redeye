@@ -3,8 +3,6 @@ msgpack = require 'msgpack'
 _ = require './util'
 { DependencyError, MultiError } = require './errors'
 
-int_re = /^\d+$/
-
 # One worker is constructed for every task coming
 # through the work queue(s). It maintains a local cache
 # of dependency values, a workspace for running the
@@ -91,11 +89,6 @@ class Worker
   # Both kinds of errors can be caught and handled normally. Dependency
   # errors are stored as the result of this key, and include a full backtrace
   # through all workers' stacks.
-  #
-  # A cycle error, if not caught, is propagated to the next worker up
-  # the dependency chain, to see if that worker can catch it. If no worker
-  # can catch it, the last worker will store the cycle error as a normal
-  # dependency error, which can be propagated normally in a stack trace.
   get: (args...) ->
     return @defer_get(args) if @in_each
     { prefix, opts, key } = @parse_args args
@@ -138,7 +131,7 @@ class Worker
   # thrown from inside the fiber in order to create sensible stack traces.
   yield: ->
     Worker.current = null
-    [ err, value ] = yield()
+    [ err, value ] = Fiber.yield()
     throw err if err
     value
 
@@ -303,8 +296,8 @@ class Worker
     Worker.current = null
     return @implode() if @dirty
     value = value?.toJSON?() ? value
-    if pack = @manager.pack[@prefix]
-      value = @pack_fields value, pack
+    if pack = @manager.opts[@prefix]?.pack
+      value = @pack_fields value, pack if value && !value.error
     value = msgpack.pack value
     @manager.finish @id, @key, value, (ok) =>
       if ok
@@ -330,25 +323,21 @@ class Worker
   # suitable for exception bubbling, then set that error as the
   # result of this key with `@finish`.
   error: (err) ->
-    if err.cycle
-      if err.complete()
-        @finish error: err.tail()
-      else
-        @implode()
-        @manager.cycle @key, err
-    else
-      trace = err.stack ? err
-      slice = @manager.slice
-      error = err.get_tail?() ? [{ trace, @key, slice }]
-      @finish { error }
+    trace = err.stack ? err
+    slice = @manager.slice
+    error = err.get_tail?() ? [{ trace, @key, slice }]
+    @finish { error }
 
   # Parse the @get arguments into the prefix, key arguments,
   # and options.
   parse_args: (args) ->
-    prefix = args[0]
-    @on_cycle = _.callback args
+    _.callback args
     opts = _.opts args
     key = args.join ':'
+    namespace = opts.namespace
+    namespace = @manager.opts[@prefix].namespace if namespace == undefined
+    key = "#{namespace}.#{key}" if namespace
+    prefix = key.split(':')[0]
     { prefix, opts, key }
 
   # Look in both our local cache and in the LRU cache for the given
@@ -357,6 +346,29 @@ class Worker
   check_cache: (key) ->
     if (cached = @cache[key]) != undefined
       cached
+    else if (value = @manager.check_helpers(key)) != undefined
+      if typeof(value) == 'function'
+        yielded = false
+        the_result = undefined
+        value (err, result) =>
+          if yielded
+            @fiber.run([err, result])
+          else
+            the_result = [err, result]
+        if the_result != undefined
+          Worker.current = this
+          [e, v] = the_result
+          throw e if e
+          return v
+        yielded = true
+        [e, v] = Fiber.yield()
+        Worker.current = this
+        throw e if e
+        v
+      else
+        [e, v] = value
+        throw e if e
+        v
     else if (cached = @manager.check_cache(key)) != undefined
       msg = source: key, target: @key
       msg.slice = @manager.slice if @manager.slice
@@ -400,7 +412,7 @@ class Worker
           undefined
       @waiting_for = null
       if err
-        @resume "#{@key} expected finished keys but got nulls: #{err.join ','}"
+        @resume "PLEASE CONTACT WATERFIELD ENERGY DEV TEAM ABOUT THIS ERROR\n#{@key} expected finished keys but got nulls: #{err.join ','}"
       else
         @resume null, arr
 
@@ -420,9 +432,9 @@ class Worker
   build: (value, prefix, opts) ->
     return value unless value?
     @test_for_error value
-    if pack = @manager.pack[prefix]
-      value = @unpack_fields value, pack
-    if wrapper = opts.as || @manager.as[prefix]
+    if pack = @manager.opts[prefix]?.pack
+      value = @unpack_fields value, pack if value
+    if wrapper = opts.as || @manager.opts[prefix]?.as
       new wrapper(value)
     else
       value
@@ -445,7 +457,7 @@ class Worker
     for args, index in @gets
       opts = _.opts args
       key = args.join ':'
-      prefix = args[0]
+      prefix = key.split(':')[0]
       @key_opts[key] = { prefix, opts, index }
       @all_keys.push key
 
@@ -513,19 +525,23 @@ class Worker
 
   # If any arguments look like integers, make them integers
   convert_args: ->
-    for arg, index in @args
-      if int_re.test(arg)
-        @args[index] = parseInt(arg)
+    _.standardize_args @args
 
-  # Pack a hash into an array using a list of fields in order.
-  pack_fields: (hash, fields) ->
-    hash[field] for field in fields
+  # Pack a hash or array of hashes into an array using a list of fields in order.
+  pack_fields: (obj, fields) ->
+    if _.isArray obj
+      @pack_fields(elem, fields) for elem in obj
+    else
+      obj[field] for field in fields
 
-  # Unpack a list of values into a hash given a list of fields.
+  # Unpack a list of values into a hash or array of hashes given a list of fields.
   unpack_fields: (array, fields) ->
-    hash = {}
-    for field, index in fields
-      hash[field] = array[index]
-    hash
+    if _.isArray array[0]
+      @unpack_fields(elem, fields) for elem in array
+    else
+      hash = {}
+      for field, index in fields
+        hash[field] = array[index]
+      hash
 
 module.exports = Worker

@@ -7,7 +7,7 @@ class DependencyError extends Error
     trace = @stack
     { key, manager } = @worker
     { slice } = manager
-    @tail.unshift { trace, key, slice }
+    @tail.push { trace, key, slice }
 
   get_tail: -> @tail
 
@@ -50,9 +50,6 @@ class CycleError extends Error
     @message = @cycle.join(' <- ')
     @name = 'CycleError'
     Error.captureStackTrace @, @constructor
-
-  complete: ->
-    @cycle[0] == @cycle[@cycle.length - 1]
 
   tail: ->
     [{ trace: @stack, key: @cycle[0] }]

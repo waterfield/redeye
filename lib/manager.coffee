@@ -8,6 +8,7 @@ Cache = require './cache'
 pool = require './pool'
 util = require 'util'
 scripts = require './scripts'
+stats = require './stats'
 _ = require './util'
 
 # The manager creates and handles `Worker` objects.
@@ -21,16 +22,18 @@ class Manager extends EventEmitter2
     @queues = opts.queues ? ['jobs']
     @max_cache_items = opts.max_cache_items || 100
     @params = {}
-    { @verbose, @flush, @slice } = opts
+    { @verbose, @flush, @slice, @host, @port } = opts
     @control = if @slice then "control_#{@slice}" else 'control'
-    @as = {}
-    @pack = {}
-    @sticky = {}
+    @opts = {}
     @done = {}
     @listeners = {}
     @triggers = {}
+    @helpers = {}
+    @helper_values = {}
+    @helper_waiters = {}
     @task_intervals = []
     @cache = new Cache max_items: @max_cache_items
+    # @diag_interval = setInterval (=> console.log @diagnostic()), 5000 # we will handle orphans differently in the future.
 
   # UTILITY METHODS
   # ===============
@@ -51,6 +54,8 @@ class Manager extends EventEmitter2
   # Reset the cache and list of done keys
   reset: ->
     @cache.reset()
+    @helper_values = {}
+    @helper_waiters = {}
     @done = {}
 
   # API METHODS
@@ -61,13 +66,15 @@ class Manager extends EventEmitter2
   run: (@callback) ->
     @connect (err) =>
       throw err if err
-      @repeat_task 'orphan', 10, => @check_for_orphans()
-      @heartbeat()
-      @listen()
-      if @flush
-        @db.flushdb => @emit 'ready'
-      else
+      finish = =>
+        # @repeat_task 'orphan', 10, => @check_for_orphans()
+        @heartbeat()
+        @listen()
         @emit 'ready'
+      if @flush
+        @db.flushdb -> finish()
+      else
+        finish()
 
   # Add a worker declaration to this manager. Declarations look like this:
   #
@@ -83,12 +90,20 @@ class Manager extends EventEmitter2
   # `@get(prefix, ...)`.
   worker: (prefix, params..., runner) ->
     opts = _.opts params
+    opts.namespace = @default_namespace if opts.namespace == undefined
+    short_prefix = prefix
+    prefix = "#{opts.namespace}.#{prefix}" if opts.namespace
     @params[prefix] = params if params.length
-    @as[prefix] = opts.as
-    @pack[prefix] = opts.pack
-    @sticky[prefix] = opts.sticky
+    @opts[prefix] = opts
     @runners[prefix] = runner
-    Workspace.prototype[prefix] = (args...) -> @get prefix, args...
+    @helpers[prefix] = true if opts.helper
+    Workspace.prototype[short_prefix] = (args...) -> @get short_prefix, args...
+
+  # Declare a number of workers, all in a given namespace
+  namespace: (namespace, body) ->
+    @default_namespace = namespace
+    body()
+    @default_namespace = undefined
 
   # XXX XXX XXX
   input: (args...) ->
@@ -108,8 +123,36 @@ class Manager extends EventEmitter2
       value = values[0] unless err
       callback?(err, value)
 
+  check_helpers: (key) ->
+    [prefix, args...] = key.split(':')
+    return undefined unless @helpers[prefix]
+    value = @helper_values[key]
+    return value if value != undefined
+    return (callback) =>
+      if set = @helper_waiters[key]
+        console.log "manager: pushing callback (#{key})"
+        set.push callback
+      else
+        console.log "manager: primary helper (#{key})"
+        @helper_waiters[key] = [callback]
+        err = undefined
+        value = undefined
+        try
+          value = @run_helper(prefix, args)
+        catch e
+          err = e
+        console.log "manager: ran helper (#{key})"
+        @helper_values[key] = [err, value]
+        cb(err, value) for cb in @helper_waiters[key]
+
   # WORKER-API METHODS
   # ==================
+
+  run_helper: (prefix, args) ->
+    _.standardize_args args
+    workspace = new Worker.Workspace
+    workspace[param] = args[i] for param, i in (@params[prefix] ? [])
+    @runners[prefix].apply workspace, args
 
   # Check our LRU cache to see if the given key is in it.
   check_cache: (key) ->
@@ -117,7 +160,7 @@ class Manager extends EventEmitter2
 
   # Add an item to the LRU cache
   add_to_cache: (prefix, key, value, sticky) ->
-    sticky ||= @sticky[prefix]
+    sticky ||= @opts[prefix]?.sticky
     @cache.add key, value, sticky
 
   # Log that a dependency is being removed (because on a re-run of a dirty
@@ -134,31 +177,23 @@ class Manager extends EventEmitter2
     @db.evalsha @scripts.require, 0, queue, target, sources..., (err, arr) =>
       return @error err if err
       if arr.shift().toString() == 'cycle'
-        source = arr[0].toString() # NOTE: there may be more!
-        err = new CycleError [target, source]
-        return callback err
+        return callback(new CycleError [arr..., target])
       values = for buf in arr
         msgpack.unpack(buf) if buf
       for source in sources
         @log null, 'redeye:require', { source, target }
       callback null, values
 
-  # Called by a worker when it has failed to recover from a cycle error.
-  # Propagate that error and remove the worker with prejudice.
-  cycle: (key, err) ->
-    msg = 'cycle|' + err.cycle.join('|')
-    @db.publish 'control', msg
-    @remove_worker key, true
-
   # Log a message. Each message type has its own channel.
   log: (key, label, payload) ->
     return unless label and payload
     payload.key = key if key
     payload.slice = @slice if @slice
-    console.log label, payload if @verbose
+    console.log new Date().getTime(), @slice, label, payload if @verbose
     @emit label, payload
     payload = msgpack.pack payload
     @db.publish label, payload
+    stats.increment "events.#{label.split(':').join('.')}"
 
   # Set up listeners for the given dependencies, such that when all
   # of them are satisfied, the worker for the key is resumed.
@@ -185,15 +220,15 @@ class Manager extends EventEmitter2
   # * `@sub`: used to listen for control messages
   # * `@db`: used for everything else
   connect: (callback) ->
-    @pool = pool({@slice})
-    scripts.load (err, @scripts) =>
+    @pool = pool({@slice, @port, @host})
+    @pool.acquire (err, @pop) =>
       return callback(err) if err
-      @pool.acquire (err, @pop) =>
+      @pool.acquire (err, @sub) =>
         return callback(err) if err
-        @pool.acquire (err, @sub) =>
+        @pool.acquire (err, @db) =>
           return callback(err) if err
-          @pool.acquire (err, @db) =>
-            callback(err)
+          scripts.load @db, (err, @scripts) =>
+            callback err
 
   # Start listening on the control channel, calling `@perform` when each
   # message is received.
@@ -281,6 +316,7 @@ class Manager extends EventEmitter2
     @_quit = true
     @clear_tasks()
     clearTimeout @heartbeat_timeout
+    clearInterval @diag_interval
     m = @db.multi()
     m.del 'heartbeat:'+@id
     for key, worker of @workers
@@ -317,23 +353,6 @@ class Manager extends EventEmitter2
         @remove_worker key
       @handle.ready.apply @, [key, true]
 
-    # A cycle was detected at some point. If we have any keys listening
-    # as the next node on the cycle, create a new cycle error and let the
-    # worker try to resume. If the worker can't catch the error, it will
-    # call our main `@cycle` method and the error will be propogated around
-    # the cycle. Meanwhile, the listeners should remove the cycle as a
-    # source, in case they do catch the cycle error.
-    cycle: (cycle...) ->
-      return unless keys = @listeners[cycle[0]]
-      delete @listeners[cycle[0]]
-      m = @db.multi()
-      for key in keys
-        err = new CycleError [key, cycle...]
-        @resume key, false, err
-        m.srem 'sources:'+key, cycle[0]
-      m.exec (err) =>
-        @error err if err
-
     # A key was completed. If we have any listeners for that key,
     # decrement their trigger count. If they have no remaining listeners,
     # resume that key. It will then grab its dependency values from
@@ -350,7 +369,7 @@ class Manager extends EventEmitter2
   # Remove the given key from our memory (it is  still up to the worker
   # to make sure internal references are erased). If the `with_prejudice`
   # flag is provided, eliminate all trace of the worker from the database
-  # as well. This will happen when a worker fails cycle recovery.
+  # as well.
   remove_worker: (key, with_prejudice) ->
     return unless worker = @workers[key]
     delete @triggers[key]

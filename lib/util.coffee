@@ -1,12 +1,26 @@
 _ = require 'underscore'
 
+int_re = /^\d+$/
+
 _.mixin
 
+  compact: (list) ->
+    _(list).select (item) -> item?
+
   opts: (args) ->
-    if args[args.length - 1]?.__proto__ == ({}).__proto__
+    if !args.length
+      {}
+    else if args[args.length - 1]?.__proto__ == ({}).__proto__
       args.pop()
     else
       {}
+
+  standardize_args: (args) ->
+    for arg, index in args
+      if int_re.test(arg)
+        args[index] = parseInt(arg)
+      else if arg == ''
+        args[index] = null
 
   namespace: (str, ns) ->
     if ns then "#{str}_#{ns}" else str
@@ -15,6 +29,8 @@ _.mixin
     for elem in arr
       return false if elem
     true
+
+  sort: (arr) -> arr.sort()
 
   callback: (args) ->
     if typeof(args[args.length - 1]) == 'function'
