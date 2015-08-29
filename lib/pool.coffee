@@ -8,7 +8,7 @@ module.exports = (opts) ->
   port = opts.port ? default_port
   host = opts.host ? default_host
   Pool
-    max: 1000
+    max: 100
     # log: true
     create: (callback) ->
       client = redis.createClient port, host, detect_buffers: true
