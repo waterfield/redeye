@@ -101,7 +101,7 @@ class CacheItem
     if !value || _.isString(value)
       value
     else if _.isArray(value)
-      @get(item) for item in value
+      (if item then @get(item) else item) for item in value
     else if _.isObject(value)
       @sub value
     else
