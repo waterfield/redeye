@@ -1,5 +1,4 @@
 redis = require 'redis'
-msgpack = require 'msgpack'
 
 port = 6379
 host = 'localhost'

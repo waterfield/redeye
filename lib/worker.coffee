@@ -296,9 +296,9 @@ class Worker
     Worker.current = null
     return @implode() if @dirty
     value = value?.toJSON?() ? value
-    if pack = @manager.opts[@prefix]?.pack
-      value = @pack_fields value, pack if value && !value.error
-    value = msgpack.pack value
+    # if pack = @manager.opts[@prefix]?.pack
+      # value = @pack_fields value, pack if value && !value.error
+    value = JSON.stringify(value ? null)
     @manager.finish @id, @key, value, (ok) =>
       if ok
         @fix_source_targets => @implode()
@@ -372,7 +372,7 @@ class Worker
     else if (cached = @manager.check_cache(key)) != undefined
       msg = source: key, target: @key
       msg.slice = @manager.slice if @manager.slice
-      msg = msgpack.pack(msg)
+      msg = JSON.stringify(msg ? null)
       @db.multi()
         .sadd('sources:'+@key, key)
         .sadd('targets:'+key, @key)
@@ -403,10 +403,12 @@ class Worker
   # and resume the fiber with them.
   stop_waiting: ->
     @db.mget @waiting_for, (err, arr) =>
+      # console.log "Worker#stop_waiting", { arr }
       return @resume err if err
       arr = for buf, index in arr
+        # console.log { buf, unpacked: msgpack.unpack(buf) }
         if buf
-          msgpack.unpack buf
+          JSON.parse buf
         else
           (err ||= []).push @waiting_for[index]
           undefined
@@ -432,8 +434,8 @@ class Worker
   build: (value, prefix, opts) ->
     return value unless value?
     @test_for_error value
-    if pack = @manager.opts[prefix]?.pack
-      value = @unpack_fields value, pack if value
+    # if pack = @manager.opts[prefix]?.pack
+    #   value = @unpack_fields value, pack if value
     if wrapper = opts.as || @manager.opts[prefix]?.as
       new wrapper(value)
     else

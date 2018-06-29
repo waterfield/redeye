@@ -16,7 +16,7 @@ r.keys '*', (err, keys) ->
       r.get buf, (err, val) ->
         throw err if err
         try
-          obj = msgpack.unpack val
+          obj = JSON.parse val
           if _.isArray(obj?.error)
             console.log obj
         catch e

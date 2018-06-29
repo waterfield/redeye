@@ -1,4 +1,3 @@
-msgpack = require 'msgpack'
 uuid = require 'node-uuid'
 {EventEmitter2} = require 'eventemitter2'
 {CycleError} = require './errors'
@@ -178,8 +177,10 @@ class Manager extends EventEmitter2
       return @error err if err
       if arr.shift().toString() == 'cycle'
         return callback(new CycleError [arr..., target])
+      # console.log "Manager#require", arr
       values = for buf in arr
-        msgpack.unpack(buf) if buf
+        # console.log "redeye !!!! I'm in the buffer of variable arr", { queue, sources, target, buf }
+        JSON.parse(buf) if buf
       for source in sources
         @log null, 'redeye:require', { source, target }
       callback null, values
@@ -191,7 +192,8 @@ class Manager extends EventEmitter2
     payload.slice = @slice if @slice
     console.log new Date().getTime(), @slice, label, payload if @verbose
     @emit label, payload
-    payload = msgpack.pack payload
+    # console.log { payload }
+    payload = JSON.stringify(payload ? null)
     @db.publish label, payload
     stats.increment "events.#{label.split(':').join('.')}"
 

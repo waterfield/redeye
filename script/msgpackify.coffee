@@ -1,4 +1,3 @@
-msgpack = require 'msgpack'
 r = require('redis').createClient 6379, 'localhost', detect_buffers: true
 
 r.keys '*', (err, all_keys) ->
@@ -13,8 +12,7 @@ r.keys '*', (err, all_keys) ->
     do (key) ->
       r.get key, (err, val) ->
         throw err if err
-        object = JSON.parse val
-        buf = msgpack.pack object
+        buf = JSON.stringify(val ? null)
         r.set key, buf, (err) ->
           throw err if err
           unless --count

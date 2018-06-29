@@ -1,4 +1,4 @@
-msgpack = require 'msgpack'
+
 redis = require 'redis'
 Manager = require '../lib/manager'
 _ = require '../lib/util'
@@ -53,7 +53,7 @@ rerun = ->
     r.select slice
     r.get seed, (err, buf) ->
       throw err if err
-      value = msgpack.unpack(buf) if buf
+      value = JSON.parse(buf) if buf
       console.log 'Done. Got:', value
       r.get 'fatal', (err, fatal) ->
         throw err if err
@@ -74,7 +74,7 @@ listen_for_completion = ->
   r.select slice
   r.subscribe 'redeye:finish'
   r.on 'message', (c, msg) ->
-    manager.quit() if msgpack.unpack(msg).key == seed
+    manager.quit() if JSON.parse(msg).key == seed
   # manager.on 'redeye:finish', (log) ->
   #   manager.quit() if log.key == seed
 

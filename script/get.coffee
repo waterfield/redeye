@@ -80,10 +80,13 @@ get_keys = (pattern, callback) ->
 
 get = (key, callback) ->
   prefix = key.split(':')[0]
+  # console.log { prefix, key }
   r.get key, (err, buf) ->
     return callback(err) if err
     if buf
-      value = msgpack.unpack buf
+      # console.log {buf}
+      value = JSON.parse buf
+      # console.log {value}
       if value && (fields = packs[prefix])?
         value = unpack_fields value, fields
       if accept value

@@ -13,7 +13,7 @@ require 'fibers'
 fs = require 'fs'
 redis = require 'redis'
 coffee = require 'coffee-script'
-msgpack = require 'msgpack'
+
 Manager = require './manager'
 _ = require './util'
 
@@ -181,7 +181,7 @@ get = (args...) ->
   key = new Buffer(args.join ':')
   prefix = key.toString().split(':')[0]
   db.get key, (err, buf) ->
-    obj = msgpack.unpack(buf) if buf
+    obj = JSON.parse(buf) if buf
     if pack = manager.opts[prefix]?.pack
       obj = unpack_fields obj, pack if obj && !obj.error
     debug 'run from get'
@@ -198,7 +198,7 @@ set = (args..., value) ->
   prefix = key.split(':')[0]
   if pack = manager.opts[prefix]?.pack
     value = pack_fields value, pack if value
-  buf = msgpack.pack value
+  buf = JSON.stringify(value ? null)
   db.multi()
     .set(key, buf)
     .set('lock:'+key, 'ready')
@@ -353,7 +353,7 @@ start_tests = ->
   sub = redis.createClient port, host, return_buffers: true
   sub.subscribe 'redeye:finish'
   sub.on 'message', (ch, msg) ->
-    msg = msgpack.unpack msg
+    msg = JSON.parse msg
     if msg.key == requested
       manager.quit()
   fiber = Fiber ->
@@ -488,7 +488,7 @@ cover = ->
 
       console.log 'SF:' + filename if fileArray.length > 1
       console.log 'SF:' + 'lib/' + filename unless fileArray.length > 1
-      
+
       data.source.forEach (line, num) ->
         num++
         if(data[num] != undefined)
