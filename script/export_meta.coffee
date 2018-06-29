@@ -1,5 +1,4 @@
 _ = require '../lib/util'
-msgpack = require 'msgpack'
 argv = require('optimist').argv
 
 class Index
