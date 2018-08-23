@@ -110,6 +110,7 @@ class CacheItem
   sub: (parent) ->
     child = {}
     child[k] = v for own k, v of parent
+    child.__proto__ = parent.__proto__
     child
 
 module.exports = Cache
